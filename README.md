@@ -60,20 +60,20 @@ Because this tool generates local configuration and tracking files at runtime, p
 **Main Interface & Recent Releases**
 ![Main UI Preview](<Main UI Preview .png>)
 
+**Most Popular Repacks of the Week**
+![Most Popular](<Most Popular of the weeek .png>)
+
+**Upcoming Repacks Schedule**
+![Upcoming Repacks](<Upcoming Repacks .png>)
+
+**Integrated Search Functionality**
+![Search](<Search.png>)
+
 **Selective Downloading & File Management**
 ![Selective Download](<Download Clicked .png>)
 
 **Active Downloads & Speed Limiter**
 ![Downloads Manager](<Download 2.png>)
-
-**Most Popular Repacks of the Week**
-![Most Popular](<Most Popular of the weeek .png>)
-
-**Integrated Search Functionality**
-![Search](<Search.png>)
-
-**Upcoming Repacks Schedule**
-![Upcoming Repacks](<Upcoming Repacks .png>)
 
 **Clean & Portable Local File Structure**
 ![Local Files](<Files created after starting exe.png>)
