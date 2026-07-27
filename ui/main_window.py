@@ -6,10 +6,9 @@ import io
 import os
 import sys
 import json
+from bs4 import BeautifulSoup
 from core.scraper import search_fitgirl_api, get_recent_fitgirl_posts, get_popular_repacks, get_upcoming_repacks, check_site_status
 from core.debrid_api import add_magnet_get_info, confirm_files_selection, get_user_account_info
-from core.downloader import downloader_engine, load_history, HAS_NOTIFICATIONS
-
 from core.downloader import downloader_engine, load_history, HAS_NOTIFICATIONS
 
 if HAS_NOTIFICATIONS:
@@ -267,6 +266,7 @@ class MainWindow(ctk.CTk):
 
             lbl = ctk.CTkLabel(card, text=item['title'], font=("Arial", 11), anchor="w", justify="left", wraplength=380)
             lbl.grid(row=0, column=0, padx=8, pady=4, sticky="w")
+
     def manual_refresh(self):
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
@@ -471,7 +471,9 @@ class MainWindow(ctk.CTk):
         if game.get('image'):
             threading.Thread(target=self._load_card_image, args=(game['image'], img_lbl), daemon=True).start()
 
-        btn = ctk.CTkButton(card, text="Download", command=lambda m=game['magnet']: self.start_download(m))
+        # Passes both magnet link and page URL for live scraping
+        game_url = game.get('link', game.get('url', ''))
+        btn = ctk.CTkButton(card, text="Download", command=lambda m=game['magnet'], u=game_url: self.start_download(m, u))
         btn.pack(pady=(10, 10), padx=10)
 
     def _load_card_image(self, img_url, img_lbl):
@@ -484,7 +486,7 @@ class MainWindow(ctk.CTk):
         except Exception:
             self.after(0, lambda: img_lbl.configure(text="[No Image]"))
 
-    def start_download(self, magnet_link):
+    def start_download(self, magnet_link, game_url=None):
         loading_popup = ctk.CTkToplevel(self)
         loading_popup.geometry("300x150")
         loading_popup.title("Fetching Files...")
@@ -492,9 +494,9 @@ class MainWindow(ctk.CTk):
         
         ctk.CTkLabel(loading_popup, text="Contacting Real-Debrid...\nAnalyzing torrent contents.", font=("Arial", 12)).pack(expand=True, padx=20, pady=20)
         
-        threading.Thread(target=self._fetch_torrent_info_thread, args=(magnet_link, loading_popup), daemon=True).start()
+        threading.Thread(target=self._fetch_torrent_info_thread, args=(magnet_link, game_url, loading_popup), daemon=True).start()
 
-    def _fetch_torrent_info_thread(self, magnet_link, loading_popup):
+    def _fetch_torrent_info_thread(self, magnet_link, game_url, loading_popup):
         torrent_info = add_magnet_get_info(magnet_link, self.get_current_api_key())
         loading_popup.destroy()
         
@@ -502,22 +504,29 @@ class MainWindow(ctk.CTk):
             print("Failed to fetch torrent information.")
             return
             
-        self.after(0, lambda: self.open_file_selection_dialog(torrent_info))
+        self.after(0, lambda: self.open_file_selection_dialog(torrent_info, game_url))
 
-    def open_file_selection_dialog(self, torrent_info):
+    def open_file_selection_dialog(self, torrent_info, game_url=None):
         dialog = ctk.CTkToplevel(self)
-        dialog.geometry("600x500")
-        dialog.title(f"Select Files — {torrent_info['filename']}")
+        dialog.geometry("700x580")
+        dialog.title(f"Download & Repack Details — {torrent_info['filename']}")
         dialog.grab_set()
 
-        ctk.CTkLabel(dialog, text=torrent_info['filename'], font=("Arial", 14, "bold")).pack(pady=(15, 5))
-        ctk.CTkLabel(dialog, text="Uncheck any optional bins, language packs, or bonuses you don't want:", text_color="gray").pack(pady=(0, 10))
+        # Tabbed interface for file selection + live details
+        tabview = ctk.CTkTabview(dialog)
+        tabview.pack(padx=15, pady=(5, 15), fill="both", expand=True)
 
-        scroll_frame = ctk.CTkScrollableFrame(dialog, width=540, height=340)
-        scroll_frame.pack(padx=20, pady=5, fill="both", expand=True)
+        tab_files = tabview.add("📁 Select Files")
+        tab_details = tabview.add("📋 Repack Features & Details")
+
+        # --- Tab 1: File Selection ---
+        ctk.CTkLabel(tab_files, text=torrent_info['filename'], font=("Arial", 14, "bold")).pack(pady=(10, 2))
+        ctk.CTkLabel(tab_files, text="Uncheck any optional bins, language packs, or bonuses you don't want:", text_color="gray").pack(pady=(0, 10))
+
+        scroll_frame = ctk.CTkScrollableFrame(tab_files, width=620, height=320)
+        scroll_frame.pack(padx=10, pady=5, fill="both", expand=True)
 
         checkbox_vars = []
-        
         for file_item in torrent_info['files']:
             var = ctk.BooleanVar(value=True)
             path = file_item.get('path', 'Unknown file')
@@ -541,8 +550,102 @@ class MainWindow(ctk.CTk):
 
             threading.Thread(target=self._finalize_download_thread, args=(torrent_info['id'], selected_ids, limit_val), daemon=True).start()
 
-        confirm_btn = ctk.CTkButton(dialog, text="Start Torrent Download", command=confirm_selection, fg_color="green", hover_color="darkgreen", height=40)
-        confirm_btn.pack(pady=15)
+        confirm_btn = ctk.CTkButton(tab_files, text="Start Torrent Download", command=confirm_selection, fg_color="green", hover_color="darkgreen", height=40)
+        confirm_btn.pack(pady=12)
+
+        # --- Tab 2: Live Scraped Features & Info ---
+        details_scroll = ctk.CTkScrollableFrame(tab_details)
+        details_scroll.pack(padx=10, pady=10, fill="both", expand=True)
+
+        loading_label = ctk.CTkLabel(
+            details_scroll, 
+            text="Fetching live repack features and game details from site...", 
+            font=("Arial", 12)
+        )
+        loading_label.pack(pady=20)
+
+        if game_url:
+            threading.Thread(target=self._fetch_live_details_thread, args=(game_url, details_scroll, loading_label), daemon=True).start()
+        else:
+            loading_label.configure(text="No direct webpage URL available to scrape details for this item.")
+
+    def _fetch_live_details_thread(self, game_url, scroll_frame, loading_label):
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            response = requests.get(game_url, headers=headers, timeout=10)
+            
+            parsed_items = []
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                content_div = soup.find('div', class_='entry-content')
+                
+                if content_div:
+                    skip_next_ul = False
+                    
+                    for child in content_div.children:
+                        if child.name is None:
+                            continue
+                            
+                        text = child.get_text().strip()
+                        
+                        # --- The Smart Filter ---
+                        if child.name in ['h3', 'h4', 'p', 'strong'] and 'Download Mirrors' in text:
+                            skip_next_ul = True
+                            continue 
+                            
+                        if skip_next_ul and child.name == 'ul':
+                            skip_next_ul = False
+                            continue
+                            
+                        for img in child.find_all('img'):
+                            img_url = img.get('src')
+                            if img_url:
+                                parsed_items.append({'type': 'image', 'url': img_url})
+                                
+                        if text:
+                            parsed_items.append({'type': 'text', 'content': text})
+                            
+                    if not parsed_items:
+                        parsed_items.append({'type': 'text', 'content': "No detailed repack features found on the page."})
+                else:
+                    parsed_items.append({'type': 'text', 'content': "Could not locate main entry-content block on the page."})
+            else:
+                parsed_items.append({'type': 'text', 'content': f"HTTP Error {response.status_code} while fetching page details."})
+                
+            self.after(0, lambda: self._render_live_details(parsed_items, scroll_frame, loading_label))
+            
+        except Exception as e:
+            self.after(0, lambda: loading_label.configure(text=f"Error fetching live details: {e}"))
+
+    def _render_live_details(self, parsed_items, scroll_frame, loading_label):
+        loading_label.destroy()
+        
+        for item in parsed_items:
+            if item['type'] == 'text':
+                lbl = ctk.CTkLabel(scroll_frame, text=item['content'], justify="left", wraplength=600, font=("Arial", 12))
+                lbl.pack(anchor="nw", padx=10, pady=(0, 15))
+            elif item['type'] == 'image':
+                img_lbl = ctk.CTkLabel(scroll_frame, text="Loading image...")
+                img_lbl.pack(anchor="nw", padx=10, pady=(0, 15))
+                threading.Thread(target=self._load_detail_image, args=(item['url'], img_lbl), daemon=True).start()
+
+    def _load_detail_image(self, img_url, img_lbl):
+        try:
+            response = requests.get(img_url, stream=True, timeout=5)
+            if response.status_code == 200:
+                img_data = Image.open(io.BytesIO(response.content))
+                
+                width, height = img_data.size
+                if width > 600:
+                    ratio = 600 / width
+                    new_size = (600, int(height * ratio))
+                else:
+                    new_size = (width, height)
+                    
+                ctk_img = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=new_size)
+                self.after(0, lambda: img_lbl.configure(image=ctk_img, text=""))
+        except Exception:
+            self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
 
     def _finalize_download_thread(self, torrent_id, selected_ids, speed_limit):
         print(f"Sending selected files to Real-Debrid...")
@@ -566,4 +669,3 @@ class MainWindow(ctk.CTk):
             progress_callback=self.update_download_progress,
             queue_complete_callback=self.notify_queue_complete
         )
-

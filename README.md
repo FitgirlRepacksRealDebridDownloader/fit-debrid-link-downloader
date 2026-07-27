@@ -46,14 +46,47 @@ Because this tool generates local configuration and tracking files at runtime, p
   * **Auto-Extraction:** Automatically unzips and extracts downloaded archive contents directly into their own dedicated folder inside your downloads directory upon completion.
 * **Speed Limiter:** Fine-tune your bandwidth using the built-in speed adjustment settings (Mbps).
 * **Built-in Search:** Quickly look up specific games using the integrated search tool.
-
+* **Live Repack Details & Features:** Click download on any game to view a dynamically scraped details window displaying the official game description, repack features, and live screenshots right alongside your file selection menu—perfectly filtered to skip unnecessary filehoster links!
 ---
 
 ## 💡 How It Works
-* **Client-Side Only:** This application acts strictly as an RSS/link parser and download manager interface. 
-* **Zero Hosting:** No copyrighted files, torrents, or media are ever hosted, stored, cached, or seeded by this application. All direct downloads are handled securely through your authenticated Real-Debrid account.
+* **Client-Side Only:** This application acts strictly as an RSS/link parser and download manager interface. It simply parses the website to grab magnet links and securely passes them directly to your authenticated Real-Debrid account for processing.
+* **Account Syncing:** When you start a download in the app, it automatically syncs with your Real-Debrid account. You can instantly view and manage the conversion directly from the **Torrents to Direct Download** page on the official Real-Debrid website.
+* **Zero Hosting:** No copyrighted files, torrents, or media are ever hosted, stored, cached, or seeded by this application. All downloads are direct HTTP streams handled entirely by Real-Debrid's servers, keeping your local network completely detached from the P2P swarm.
 
+---
 
+## 📸 App Previews
+
+**Main Interface & Recent Releases**
+![Main UI Preview](<Main UI Preview .png>)
+
+**Most Popular Repacks of the Week**
+![Most Popular](<Most Popular of the weeek .png>)
+
+**Upcoming Repacks Schedule**
+![Upcoming Repacks](<Upcoming Repacks .png>)
+
+**Integrated Search Functionality**
+![Search](<Search.png>)
+
+**Selective Downloading & File Management**
+![Selective Download](<Download Clicked .png>)
+
+**Active Downloads & Speed Limiter**
+![Downloads Manager](<Download 2.png>)
+
+**Clean & Portable Local File Structure**
+![Local Files](<Files created after starting exe.png>)
+
+**Real-Debrid Dashboard Integration**
+![Real-Debrid Torrents Page](<Real-Debrid Tracking .png>)
+
+**Live Repack Features & File Selection**
+![Repack Details](<Details.png>)
+
+**Live Repack Features & File Selection**
+![Repack Details](<Details 2.png>)
 
 ---
 
