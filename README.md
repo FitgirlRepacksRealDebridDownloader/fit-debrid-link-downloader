@@ -58,16 +58,16 @@ Because this tool generates local configuration and tracking files at runtime, p
 ## 📸 App Previews
 
 **Main Interface & Recent Releases**
-![Main UI Preview](<Main UI Preview .jpg>)
+![Main UI Preview](<Main UI Preview .png>)
 
 **Selective Downloading & File Management**
-![Selective Download](<Download Clicked .jpg>)
+![Selective Download](<Download Clicked .png>)
 
 **Active Downloads & Speed Limiter**
 ![Downloads Manager](<Download 2.png>)
 
 **Most Popular Repacks of the Week**
-![Most Popular](<Most Popular of the weeek .jpg>)
+![Most Popular](<Most Popular of the weeek .png>)
 
 **Integrated Search Functionality**
 ![Search](<Search.png>)
