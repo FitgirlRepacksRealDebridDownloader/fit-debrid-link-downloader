@@ -1,0 +1,8 @@
+build/
+dist/
+*.spec
+config.json
+download_history.json
+__pycache__/
+.env
+*.ico
