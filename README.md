@@ -52,3 +52,10 @@ Because this tool generates local configuration and tracking files at runtime, p
 ## 💡 How It Works
 * **Client-Side Only:** This application acts strictly as an RSS/link parser and download manager interface. 
 * **Zero Hosting:** No copyrighted files, torrents, or media are ever hosted, stored, cached, or seeded by this application. All direct downloads are handled securely through your authenticated Real-Debrid account.
+
+
+
+---
+
+## 💖 Support the Original Creator
+* **Support FitGirl:** This tool interacts with data provided by FitGirl Repacks. If you appreciate her incredible work, please consider supporting her directly by visiting the official [FitGirl Repacks Donations Page](https://fitgirl-repacks.site/donations/) to donate.
