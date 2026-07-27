@@ -53,6 +53,30 @@ Because this tool generates local configuration and tracking files at runtime, p
 * **Client-Side Only:** This application acts strictly as an RSS/link parser and download manager interface. 
 * **Zero Hosting:** No copyrighted files, torrents, or media are ever hosted, stored, cached, or seeded by this application. All direct downloads are handled securely through your authenticated Real-Debrid account.
 
+---
+
+## 📸 App Previews
+
+**Main Interface & Recent Releases**
+![Main UI Preview](<Main UI Preview .jpg>)
+
+**Selective Downloading & File Management**
+![Selective Download](<Download Clicked .jpg>)
+
+**Active Downloads & Speed Limiter**
+![Downloads Manager](<Download 2.png>)
+
+**Most Popular Repacks of the Week**
+![Most Popular](<Most Popular of the weeek .jpg>)
+
+**Integrated Search Functionality**
+![Search](<Search.png>)
+
+**Upcoming Repacks Schedule**
+![Upcoming Repacks](<Upcoming Repacks .png>)
+
+**Clean & Portable Local File Structure**
+![Local Files](<Files created after starting exe.png>)
 
 
 ---
