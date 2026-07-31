@@ -1,3 +1,6 @@
+# =====================================================================
+# --- IMPORTS & DEPENDENCIES ---
+# =====================================================================
 import requests
 from bs4 import BeautifulSoup
 import html
@@ -5,6 +8,9 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# =====================================================================
+# --- CONFIGURATION & ENDPOINTS ---
+# =====================================================================
 _BASE_URL = "https://fitgirl-repacks.site"
 _API_URL = f"{_BASE_URL}/wp-json/wp/v2/posts"
 _HEADERS = {
@@ -13,8 +19,12 @@ _HEADERS = {
 _CACHE_FILE = "repacks_cache.json"
 _POPULAR_CACHE_FILE = "popular_cache.json"
 
+
+# =====================================================================
+# --- SEARCH API SCRAPER ---
+# =====================================================================
 def search_fitgirl_api(query):
-    """Searches FitGirl via WordPress REST API and extracts magnet links directly."""
+    """Searches FitGirl via WordPress REST API and extracts magnet links directly[cite: 5]."""
     params = {
         "search": query,
         "per_page": 5
@@ -41,8 +51,9 @@ def search_fitgirl_api(query):
                     
             img_url = None
             img_tag = soup.find('img')
-            if img_tag and img_tag.get('src'):
-                img_url = img_tag['src']
+            if img_tag:
+                img_url = img_tag.get('src') or img_tag.get('data-src') or img_tag.get('data-lazy-src')
+                print(f"Title: {title} | Image Tag Found: {img_tag}")
             
             if magnet_link:
                 results.append({
@@ -56,8 +67,12 @@ def search_fitgirl_api(query):
         print(f"Error fetching from FitGirl API: {e}")
         return []
 
+
+# =====================================================================
+# --- CACHE MANAGEMENT & RECENT POSTS ---
+# =====================================================================
 def get_cached_posts_only():
-    """Instantly returns local cache without touching the network."""
+    """Instantly returns local cache without touching the network[cite: 5]."""
     if os.path.exists(_CACHE_FILE):
         try:
             with open(_CACHE_FILE, "r", encoding="utf-8") as f:
@@ -67,7 +82,7 @@ def get_cached_posts_only():
     return []
 
 def fetch_and_update_cache():
-    """Fetches fresh posts from the API in the background and updates the local cache."""
+    """Fetches fresh posts from the API in the background and updates the local cache[cite: 5]."""
     params = {
         "per_page": 30
     }
@@ -96,9 +111,10 @@ def fetch_and_update_cache():
                 
             img_url = None
             img_tag = soup.find('img')
-            if img_tag and img_tag.get('src'):
-                img_url = img_tag['src']
-                
+            if img_tag:
+                img_url = img_tag.get('src') or img_tag.get('data-src') or img_tag.get('data-lazy-src')
+                print(f"Title: {title} | Image Tag Found: {img_tag}")
+
             if title and magnet_link:
                 results.append({
                     "title": title,
@@ -118,7 +134,7 @@ def fetch_and_update_cache():
         return []
 
 def get_recent_fitgirl_posts(force_refresh=False):
-    """Loads cache instantly, or fetches live if force_refresh is True."""
+    """Loads cache instantly, or fetches live if force_refresh is True[cite: 5]."""
     if force_refresh:
         fresh = fetch_and_update_cache()
         if fresh:
@@ -131,8 +147,13 @@ def get_recent_fitgirl_posts(force_refresh=False):
         import threading
         threading.Thread(target=fetch_and_update_cache, daemon=True).start()
     return cached
+
+
+# =====================================================================
+# --- POPULAR REPACKS SCRAPER ---
+# =====================================================================
 def get_popular_repacks(force_refresh=False):
-    """Loads popular repacks from cache instantly, or scrapes live if force_refresh is True."""
+    """Loads popular repacks from cache instantly, or scrapes live if force_refresh is True[cite: 5]."""
     if not force_refresh and os.path.exists(_POPULAR_CACHE_FILE):
         try:
             with open(_POPULAR_CACHE_FILE, "r", encoding="utf-8") as f:
@@ -147,7 +168,7 @@ def get_popular_repacks(force_refresh=False):
     return _fetch_and_cache_popular()
 
 def _fetch_and_cache_popular():
-    """Scrapes the popular widget and saves it to local cache."""
+    """Scrapes the popular widget and saves it to local cache[cite: 5]."""
     try:
         response = requests.get(_BASE_URL, headers=_HEADERS, timeout=15)
         response.raise_for_status()
@@ -241,8 +262,12 @@ def _fetch_and_cache_popular():
                 pass
         return []
 
+
+# =====================================================================
+# --- UPCOMING REPACKS & SCHEDULE SCRAPER ---
+# =====================================================================
 def get_upcoming_repacks():
-    """Scrapes FitGirl's upcoming repacks from the colored span layout."""
+    """Scrapes FitGirl's upcoming repacks from the colored span layout[cite: 5]."""
     upcoming_url = "https://fitgirl-repacks.site/upcoming-repacks/"
     try:
         response = requests.get(upcoming_url, headers=_HEADERS, timeout=10)
@@ -252,7 +277,6 @@ def get_upcoming_repacks():
         soup = BeautifulSoup(response.text, 'html.parser')
         
         upcoming_items = []
-        # Target spans with the specific hex color #339966 used for upcoming items
         for span in soup.find_all('span', style=lambda value: value and '#339966' in value.lower()):
             text = span.get_text().strip()
             if text and len(text) > 2:
@@ -269,7 +293,7 @@ def get_upcoming_repacks():
         return []
 
 def search_upcoming_fallback():
-    """Fallback to searching posts if the exact slug endpoint varies."""
+    """Fallback to searching posts if the exact slug endpoint varies[cite: 5]."""
     try:
         response = requests.get(f"{_BASE_URL}/upcoming-repacks/", headers=_HEADERS, timeout=10)
         if response.status_code != 200:
@@ -294,8 +318,12 @@ def search_upcoming_fallback():
     except Exception:
         return []
 
+
+# =====================================================================
+# --- SITE STATUS CHECKER ---
+# =====================================================================
 def check_site_status():
-    """Checks if FitGirl Repacks site is up and reachable."""
+    """Checks if FitGirl Repacks site is up and reachable[cite: 5]."""
     try:
         response = requests.get(_BASE_URL, headers=_HEADERS, timeout=5)
         return response.status_code == 200

@@ -1,3 +1,6 @@
+# =====================================================================
+# --- IMPORTS & DEPENDENCIES ---
+# =====================================================================
 import customtkinter as ctk
 import threading
 from PIL import Image
@@ -14,11 +17,15 @@ from core.downloader import downloader_engine, load_history, HAS_NOTIFICATIONS
 if HAS_NOTIFICATIONS:
     from plyer import notification
 
+
+# =====================================================================
+# --- MAIN APPLICATION WINDOW CLASS ---
+# =====================================================================
 class MainWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # --- Window Setup ---
+        # --- Window Setup & Styling Configuration ---
         self.title("FitGirl Repacks Real-Debrid Downloader")
         self.geometry("1200x750")
         ctk.set_appearance_mode("dark")
@@ -30,7 +37,7 @@ class MainWindow(ctk.CTk):
         self.current_view = "recent"
         self.active_downloads = {}
 
-        # --- Left Sidebar ---
+        # --- Left Sidebar Layout & Navigation ---
         self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(10, weight=1)
@@ -46,11 +53,10 @@ class MainWindow(ctk.CTk):
         self.fitgirl_badge = ctk.CTkLabel(self.sidebar_frame, text="FitGirl: Checking...", font=("Arial", 10), text_color="orange")
         self.fitgirl_badge.grid(row=2, column=0, padx=20, pady=(0, 10))
 
-        # Custom API Key Entry Section
+        # Custom Real-Debrid API Key Entry & Management Section
         self.api_key_entry = ctk.CTkEntry(self.sidebar_frame, placeholder_text="Enter RD API Key...", width=180, show="*")
         self.api_key_entry.grid(row=3, column=0, padx=20, pady=(0, 5))
         
-        # Pre-load saved API key if available
         saved_key = self.load_saved_api_key()
         if saved_key:
             self.api_key_entry.insert(0, saved_key)
@@ -58,6 +64,7 @@ class MainWindow(ctk.CTk):
         self.api_save_btn = ctk.CTkButton(self.sidebar_frame, text="Update API Key", width=180, height=28, command=self.update_api_key)
         self.api_save_btn.grid(row=4, column=0, padx=20, pady=(0, 15))
 
+        # Navigation Buttons
         self.nav_home = ctk.CTkButton(
             self.sidebar_frame, text="Home / Recent", 
             command=self.show_startup_recent,
@@ -93,7 +100,7 @@ class MainWindow(ctk.CTk):
         )
         self.nav_history.grid(row=9, column=0, padx=20, pady=8)
 
-        # Theme Selector Dropdown in Sidebar
+        # Theme Selector Dropdown
         self.theme_menu = ctk.CTkOptionMenu(
             self.sidebar_frame, values=["blue", "green", "dark-blue"],
             command=self.change_theme_color, width=180
@@ -101,7 +108,7 @@ class MainWindow(ctk.CTk):
         self.theme_menu.grid(row=10, column=0, padx=20, pady=(10, 20), sticky="s")
         self.theme_menu.set("blue")
 
-        # --- Main Content Area ---
+        # --- Main Content Area & Search Bar Layout ---
         self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         self.main_frame.grid_rowconfigure(1, weight=1)
@@ -126,16 +133,23 @@ class MainWindow(ctk.CTk):
         self.speed_entry.pack(side="left", padx=(0, 5))
         self.speed_entry.insert(0, "250")
 
+        # Scrollable Display Grid for Games / Content
         self.results_scroll = ctk.CTkScrollableFrame(self.main_frame)
         self.results_scroll.grid(row=1, column=0, sticky="nsew")
         self.results_scroll.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
+        # Initial Application State Startup Hooks
         self.after(50, self.show_startup_recent)
         self.after(100, self.check_rd_account)
         self.after(150, self.check_site_status)
         self._poll_downloads_view()
 
+
+    # =====================================================================
+    # --- CONFIGURATION & SETTINGS MANAGEMENT ---
+    # =====================================================================
     def load_saved_api_key(self):
+        """Loads local Real-Debrid API credentials from disk config file."""
         try:
             if os.path.exists("config.json"):
                 with open("config.json", "r") as f:
@@ -146,6 +160,7 @@ class MainWindow(ctk.CTk):
         return ""
 
     def save_api_key_to_disk(self, key):
+        """Saves Real-Debrid API credentials securely to disk config file."""
         try:
             with open("config.json", "w") as f:
                 json.dump({"rd_api_key": key}, f)
@@ -153,6 +168,7 @@ class MainWindow(ctk.CTk):
             print(f"Failed to save config: {e}")
 
     def get_current_api_key(self):
+        """Retrieves active API key from entry field or falls back to saved disk config."""
         key = self.api_key_entry.get().strip()
         if key:
             return key
@@ -162,12 +178,32 @@ class MainWindow(ctk.CTk):
         return None
 
     def update_api_key(self):
+        """Triggers API key persistence and re-validates account tier status."""
         key = self.api_key_entry.get().strip()
         if key:
             self.save_api_key_to_disk(key)
         self.check_rd_account()
 
+    def change_theme_color(self, new_theme):
+        """Swaps customtkinter global accent color theme dynamically."""
+        ctk.set_default_color_theme(new_theme)
+        if self.current_view == "recent":
+            self.show_startup_recent()
+        elif self.current_view == "popular":
+            self.show_game_repacks()
+        elif self.current_view == "upcoming":
+            self.show_upcoming_view()
+        elif self.current_view == "downloads":
+            self.show_downloads_view()
+        elif self.current_view == "history":
+            self.show_history_view()
+
+
+    # =====================================================================
+    # --- API STATUS & NETWORK HEALTH CHECKS ---
+    # =====================================================================
     def check_rd_account(self):
+        """Spawns background thread to check Real-Debrid account validity."""
         threading.Thread(target=self._fetch_account_thread, daemon=True).start()
 
     def _fetch_account_thread(self):
@@ -180,6 +216,7 @@ class MainWindow(ctk.CTk):
             self.after(0, lambda: self.account_badge.configure(text="RD: Invalid Key", text_color="red"))
 
     def check_site_status(self):
+        """Spawns background thread to test target repack site availability."""
         threading.Thread(target=self._fetch_site_status_thread, daemon=True).start()
 
     def _fetch_site_status_thread(self):
@@ -189,20 +226,12 @@ class MainWindow(ctk.CTk):
         else:
             self.after(0, lambda: self.fitgirl_badge.configure(text="FitGirl: Offline", text_color="red"))
 
-    def change_theme_color(self, new_theme):
-        ctk.set_default_color_theme(new_theme)
-        if self.current_view == "recent":
-            self.show_startup_recent()
-        elif self.current_view == "popular":
-            self.show_game_repacks()
-        elif self.current_view == "upcoming":
-            self.show_upcoming_view()
-        elif self.current_view == "downloads":
-            self.show_downloads_view()
-        elif self.current_view == "history":
-            self.show_history_view()
-            
+
+    # =====================================================================
+    # --- VIEW ROUTING & CONTENT LOADERS ---
+    # =====================================================================
     def show_startup_recent(self):
+        """Renders the Home view displaying newly posted repacks."""
         self.current_view = "recent"
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
@@ -215,6 +244,7 @@ class MainWindow(ctk.CTk):
         self.after(0, lambda: self._update_grid_safely(results))
 
     def show_game_repacks(self):
+        """Renders the Most Popular Repacks of the Week view."""
         self.current_view = "popular"
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
@@ -227,6 +257,7 @@ class MainWindow(ctk.CTk):
         self.after(0, lambda: self._update_grid_safely(results))
 
     def show_upcoming_view(self):
+        """Renders the upcoming game release schedule view."""
         self.current_view = "upcoming"
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
@@ -268,6 +299,7 @@ class MainWindow(ctk.CTk):
             lbl.grid(row=0, column=0, padx=8, pady=4, sticky="w")
 
     def manual_refresh(self):
+        """Forces cache bypass and re-scrapes active content views."""
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
         if self.current_view == "recent":
@@ -287,7 +319,88 @@ class MainWindow(ctk.CTk):
             return
         self.populate_grid(results)
 
+    def perform_search(self):
+        """Executes site query search based on user text entry."""
+        query = self.search_entry.get()
+        if not query: 
+            return
+        self.current_view = "search"
+        for widget in self.results_scroll.winfo_children(): 
+            widget.destroy()
+        self.results_scroll.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        ctk.CTkLabel(self.results_scroll, text="Searching FitGirl...").grid(row=0, column=0, columnspan=4, pady=20)
+        threading.Thread(target=self._search_thread, args=(query,), daemon=True).start()
+
+    def _search_thread(self, query):
+        results = search_fitgirl_api(query)
+        self.after(0, lambda: self._update_grid_safely(results))
+
+
+    # =====================================================================
+    # --- GAME CARD & GRID RENDERING SYSTEM ---
+    # =====================================================================
+    def populate_grid(self, results):
+        row_idx = 0
+        col_idx = 0
+        for game in results:
+            self._build_game_card(game, row_idx, col_idx)
+            col_idx += 1
+            if col_idx > 3:
+                col_idx = 0
+                row_idx += 1
+
+    def _build_game_card(self, game, row, col):
+        card = ctk.CTkFrame(self.results_scroll, corner_radius=10)
+        card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+        
+        display_title = game['title'][:30] + "..." if len(game['title']) > 30 else game['title']
+        title_lbl = ctk.CTkLabel(card, text=display_title, font=("Arial", 12, "bold"), wraplength=150)
+        title_lbl.pack(pady=(10, 5), padx=10)
+
+        img_lbl = ctk.CTkLabel(card, text="Loading image...", width=150, height=200)
+        img_lbl.pack(pady=5)
+
+        if game.get('image'):
+            threading.Thread(target=self._load_card_image, args=(game['image'], img_lbl), daemon=True).start()
+
+        game_url = game.get('link', game.get('url', ''))
+        btn = ctk.CTkButton(card, text="Download", command=lambda m=game['magnet'], u=game_url: self.start_download(m, u))
+        btn.pack(pady=(10, 10), padx=10)
+
+    def _load_card_image(self, img_url, img_lbl):
+        """Asynchronously downloads, formats, and renders game grid poster thumbnails with CDN fallback support."""
+        try:
+            if not img_url:
+                self.after(0, lambda: img_lbl.configure(text="", image=None))
+                return
+
+            if img_url.startswith("http://"):
+                img_url = "https://" + img_url[7:]
+            
+            if "fastpic.ru" in img_url:
+                img_url = img_url.replace("fastpic.ru", "img.fastpic.org")
+
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 
+                "Referer": "https://fitgirl-repacks.site/"
+            }
+            
+            response = requests.get(img_url, stream=True, timeout=8, headers=headers)
+            if response.status_code == 200:
+                img_data = Image.open(io.BytesIO(response.content))
+                ctk_img = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=(150, 200))
+                self.after(0, lambda: img_lbl.configure(image=ctk_img, text=""))
+            else:
+                self.after(0, lambda: img_lbl.configure(text="", image=None))
+        except Exception:
+            self.after(0, lambda: img_lbl.configure(text="", image=None))
+
+
+    # =====================================================================
+    # --- DOWNLOAD MANAGER & QUEUE SYSTEM ---
+    # =====================================================================
     def show_downloads_view(self):
+        """Renders active download progress queue manager view."""
         self.current_view = "downloads"
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
@@ -306,6 +419,7 @@ class MainWindow(ctk.CTk):
                 row_idx += 1
 
     def show_history_view(self):
+        """Renders completed download archives history view."""
         self.current_view = "history"
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
@@ -432,60 +546,10 @@ class MainWindow(ctk.CTk):
             except Exception:
                 pass
 
-    def perform_search(self):
-        query = self.search_entry.get()
-        if not query: 
-            return
-        self.current_view = "search"
-        for widget in self.results_scroll.winfo_children(): 
-            widget.destroy()
-        self.results_scroll.grid_columnconfigure((0, 1, 2, 3), weight=1)
-        ctk.CTkLabel(self.results_scroll, text="Searching FitGirl...").grid(row=0, column=0, columnspan=4, pady=20)
-        threading.Thread(target=self._search_thread, args=(query,), daemon=True).start()
 
-    def _search_thread(self, query):
-        results = search_fitgirl_api(query)
-        self.after(0, lambda: self._update_grid_safely(results))
-
-    def populate_grid(self, results):
-        row_idx = 0
-        col_idx = 0
-        for game in results:
-            self._build_game_card(game, row_idx, col_idx)
-            col_idx += 1
-            if col_idx > 3:
-                col_idx = 0
-                row_idx += 1
-
-    def _build_game_card(self, game, row, col):
-        card = ctk.CTkFrame(self.results_scroll, corner_radius=10)
-        card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
-        
-        display_title = game['title'][:30] + "..." if len(game['title']) > 30 else game['title']
-        title_lbl = ctk.CTkLabel(card, text=display_title, font=("Arial", 12, "bold"), wraplength=150)
-        title_lbl.pack(pady=(10, 5), padx=10)
-
-        img_lbl = ctk.CTkLabel(card, text="Loading image...", width=150, height=200)
-        img_lbl.pack(pady=5)
-
-        if game.get('image'):
-            threading.Thread(target=self._load_card_image, args=(game['image'], img_lbl), daemon=True).start()
-
-        # Passes both magnet link and page URL for live scraping
-        game_url = game.get('link', game.get('url', ''))
-        btn = ctk.CTkButton(card, text="Download", command=lambda m=game['magnet'], u=game_url: self.start_download(m, u))
-        btn.pack(pady=(10, 10), padx=10)
-
-    def _load_card_image(self, img_url, img_lbl):
-        try:
-            response = requests.get(img_url, stream=True, timeout=5)
-            if response.status_code == 200:
-                img_data = Image.open(io.BytesIO(response.content))
-                ctk_img = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=(150, 200))
-                self.after(0, lambda: img_lbl.configure(image=ctk_img, text=""))
-        except Exception:
-            self.after(0, lambda: img_lbl.configure(text="[No Image]"))
-
+    # =====================================================================
+    # --- REAL-DEBRID TORRENT & FILE SELECTION DIALOG ---
+    # =====================================================================
     def start_download(self, magnet_link, game_url=None):
         loading_popup = ctk.CTkToplevel(self)
         loading_popup.geometry("300x150")
@@ -512,14 +576,13 @@ class MainWindow(ctk.CTk):
         dialog.title(f"Download & Repack Details — {torrent_info['filename']}")
         dialog.grab_set()
 
-        # Tabbed interface for file selection + live details
         tabview = ctk.CTkTabview(dialog)
         tabview.pack(padx=15, pady=(5, 15), fill="both", expand=True)
 
         tab_files = tabview.add("📁 Select Files")
         tab_details = tabview.add("📋 Repack Features & Details")
 
-        # --- Tab 1: File Selection ---
+        # --- Tab 1: File Selection UI ---
         ctk.CTkLabel(tab_files, text=torrent_info['filename'], font=("Arial", 14, "bold")).pack(pady=(10, 2))
         ctk.CTkLabel(tab_files, text="Uncheck any optional bins, language packs, or bonuses you don't want:", text_color="gray").pack(pady=(0, 10))
 
@@ -553,7 +616,7 @@ class MainWindow(ctk.CTk):
         confirm_btn = ctk.CTkButton(tab_files, text="Start Torrent Download", command=confirm_selection, fg_color="green", hover_color="darkgreen", height=40)
         confirm_btn.pack(pady=12)
 
-        # --- Tab 2: Live Scraped Features & Info ---
+        # --- Tab 2: Live Web Scraping & Details UI ---
         details_scroll = ctk.CTkScrollableFrame(tab_details)
         details_scroll.pack(padx=10, pady=10, fill="both", expand=True)
 
@@ -588,7 +651,6 @@ class MainWindow(ctk.CTk):
                             
                         text = child.get_text().strip()
                         
-                        # --- The Smart Filter ---
                         if child.name in ['h3', 'h4', 'p', 'strong'] and 'Download Mirrors' in text:
                             skip_next_ul = True
                             continue 
@@ -630,21 +692,47 @@ class MainWindow(ctk.CTk):
                 threading.Thread(target=self._load_detail_image, args=(item['url'], img_lbl), daemon=True).start()
 
     def _load_detail_image(self, img_url, img_lbl):
+        """Asynchronously loads, scales, and renders detailed game view images."""
         try:
-            response = requests.get(img_url, stream=True, timeout=5)
+            if not img_url:
+                self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
+                return
+            
+            if img_url.startswith("http://"):
+                img_url = "https://" + img_url[7:]
+            
+            if "fastpic.ru" in img_url:
+                img_url = img_url.replace("fastpic.ru", "img.fastpic.org")
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Referer": "https://fitgirl-repacks.site/"
+            }
+            
+            response = requests.get(img_url, stream=True, timeout=8, headers=headers)
+            print(f"Image URL: {img_url} | Status: {response.status_code}")
+            
             if response.status_code == 200:
-                img_data = Image.open(io.BytesIO(response.content))
-                
-                width, height = img_data.size
-                if width > 600:
-                    ratio = 600 / width
-                    new_size = (600, int(height * ratio))
-                else:
-                    new_size = (width, height)
+                try:
+                    img_data = Image.open(io.BytesIO(response.content))
                     
-                ctk_img = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=new_size)
-                self.after(0, lambda: img_lbl.configure(image=ctk_img, text=""))
-        except Exception:
+                    width, height = img_data.size
+                    if width > 600:
+                        ratio = 600 / width
+                        new_size = (600, int(height * ratio))
+                    else:
+                        new_size = (width, height)
+                        
+                    ctk_img = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=new_size)
+                    self.after(0, lambda: img_lbl.configure(image=ctk_img, text=""))
+                except Exception as img_err:
+                    print(f"PIL Image Decode Failed for {img_url}: {img_err}")
+                    self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
+            else:
+                print(f"Image URL: {img_url} | Failed Status: {response.status_code}")
+                self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
+        except Exception as e:
+            print(f"Failed Image URL: {img_url} | Error: {e}")
             self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
 
     def _finalize_download_thread(self, torrent_id, selected_ids, speed_limit):

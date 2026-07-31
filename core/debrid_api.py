@@ -1,17 +1,28 @@
+# =====================================================================
+# --- IMPORTS & DEPENDENCIES ---
+# =====================================================================
 import os
 import time
 import requests
 from dotenv import load_dotenv
 
 
+# =====================================================================
+# --- HEADER & AUTHENTICATION UTILITIES ---
+# =====================================================================
 def get_headers(custom_api_key=None):
+    """Generates authorization headers using custom key or environment variables[cite: 7]."""
     key = custom_api_key or os.getenv("RD_API_KEY")
     return {"Authorization": f"Bearer {key}"}
 
 _API_BASE = "https://api.real-debrid.com/rest/1.0"
 
+
+# =====================================================================
+# --- REAL-DEBRID ACCOUNT API ---
+# =====================================================================
 def get_user_account_info(custom_api_key=None):
-    """Fetches user account status, type, and expiration days."""
+    """Fetches user account status, type, and expiration days[cite: 7]."""
     url = f"{_API_BASE}/user"
     try:
         response = requests.get(url, headers=get_headers(custom_api_key), timeout=5)
@@ -21,8 +32,12 @@ def get_user_account_info(custom_api_key=None):
         print(f"Error fetching account info: {e}")
     return None
 
+
+# =====================================================================
+# --- TORRENT SUBMISSION & FILE MANAGEMENT API ---
+# =====================================================================
 def add_magnet_get_info(magnet_link, custom_api_key=None):
-    """Adds the magnet link to Real-Debrid and fetches the file list."""
+    """Adds the magnet link to Real-Debrid and fetches the file list[cite: 7]."""
     print("Sending magnet to Real-Debrid...")
     
     add_url = f"{_API_BASE}/torrents/addMagnet"
@@ -51,7 +66,7 @@ def add_magnet_get_info(magnet_link, custom_api_key=None):
     return None
 
 def confirm_files_selection(torrent_id, selected_file_ids, custom_api_key=None):
-    """Submits file selection and mirrors the web UI's torrent lifecycle."""
+    """Submits file selection and mirrors the web UI's torrent lifecycle[cite: 7]."""
     select_url = f"{_API_BASE}/torrents/selectFiles/{torrent_id}"
     files_str = ",".join(map(str, selected_file_ids)) if selected_file_ids else "none"
     

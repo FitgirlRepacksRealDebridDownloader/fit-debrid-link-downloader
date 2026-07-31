@@ -1,3 +1,6 @@
+# =====================================================================
+# --- IMPORTS & DEPENDENCIES ---
+# =====================================================================
 import os
 import time
 import requests
@@ -7,15 +10,21 @@ import patoolib
 import threading
 import json
 
+# Optional desktop notification support check
 try:
     from plyer import notification
     HAS_NOTIFICATIONS = True
 except ImportError:
     HAS_NOTIFICATIONS = False
 
+
+# =====================================================================
+# --- HISTORY FILE MANAGEMENT ---
+# =====================================================================
 HISTORY_FILE = "download_history.json"
 
 def load_history():
+    """Loads completed download history logs from disk[cite: 6]."""
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r") as f:
@@ -25,6 +34,7 @@ def load_history():
     return []
 
 def save_history_item(item):
+    """Appends a completed download record to history storage[cite: 6]."""
     history = load_history()
     history.insert(0, item)
     try:
@@ -33,6 +43,10 @@ def save_history_item(item):
     except Exception as e:
         print(f"Error saving history: {e}")
 
+
+# =====================================================================
+# --- FILE DOWNLOAD & EXTRACTION ENGINE ---
+# =====================================================================
 class FileDownloader:
     def __init__(self):
         self.active_downloads = {}
@@ -41,6 +55,7 @@ class FileDownloader:
         self.queue_lock = threading.Lock()
 
     def add_to_queue(self, download_tasks, speed_limit=None, progress_callback=None, queue_complete_callback=None):
+        """Appends multiple download links to the queue and starts processing worker[cite: 6]."""
         with self.queue_lock:
             for link in download_tasks:
                 self.download_queue.append({
@@ -54,6 +69,7 @@ class FileDownloader:
             threading.Thread(target=self._process_queue_loop, daemon=True).start()
 
     def _process_queue_loop(self):
+        """Worker loop that sequentially handles queued file downloads[cite: 6]."""
         self.is_processing_queue = True
         while True:
             with self.queue_lock:
@@ -71,6 +87,7 @@ class FileDownloader:
             )
 
     def download_file(self, url, save_folder="Downloads", speed_limit_mbps=None, progress_callback=None, download_id=None):
+        """Downloads a single file with bandwidth shaping, progress updates, and auto-extraction[cite: 6]."""
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
             
@@ -155,6 +172,7 @@ class FileDownloader:
                 del self.active_downloads[download_id]
 
     def stop_download(self, download_id):
+        """Halts an active download thread[cite: 6]."""
         if download_id in self.active_downloads:
             self.active_downloads[download_id] = False
 
