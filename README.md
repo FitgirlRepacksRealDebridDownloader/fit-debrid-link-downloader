@@ -88,7 +88,12 @@ Because this tool generates local configuration and tracking files at runtime, p
 **Live Repack Features & File Selection**
 ![Repack Details](<Details 2.png>)
 
+
+
 ---
 
 ## 💖 Support the Original Creator
 * **Support FitGirl:** This tool interacts with data provided by FitGirl Repacks. If you appreciate her incredible work, please consider supporting her directly by visiting the official [FitGirl Repacks Donations Page](https://fitgirl-repacks.site/donations/) to donate.
+
+
+Disclaimer: This project is an independent, open-source client application designed solely to interface with Real-Debrid and public web data. The author does not host, store, cache, upload, or distribute any ROMs, media, torrents, or copyrighted content on any server. All data processing and direct downloads are handled entirely via third-party services and the user's personal Real-Debrid account. This tool is provided "as is" without warranty of any kind.
