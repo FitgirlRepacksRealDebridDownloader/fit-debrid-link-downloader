@@ -9,6 +9,7 @@ import io
 import os
 import sys
 import json
+import urllib.parse
 from bs4 import BeautifulSoup
 from core.scraper import search_fitgirl_api, get_recent_fitgirl_posts, get_popular_repacks, get_upcoming_repacks, check_site_status
 from core.debrid_api import add_magnet_get_info, confirm_files_selection, get_user_account_info
@@ -36,6 +37,7 @@ class MainWindow(ctk.CTk):
 
         self.current_view = "recent"
         self.active_downloads = {}
+        self.current_accent = "#1f6aa5"
 
         # --- Left Sidebar Layout & Navigation ---
         self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
@@ -66,7 +68,7 @@ class MainWindow(ctk.CTk):
 
         # Navigation Buttons
         self.nav_home = ctk.CTkButton(
-            self.sidebar_frame, text="Home / Recent", 
+            self.sidebar_frame, text="Recent Repacks", 
             command=self.show_startup_recent,
             fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE")
         )
@@ -102,7 +104,7 @@ class MainWindow(ctk.CTk):
 
         # Theme Selector Dropdown
         self.theme_menu = ctk.CTkOptionMenu(
-            self.sidebar_frame, values=["blue", "green", "dark-blue"],
+            self.sidebar_frame, values=["blue", "dark-blue", "green", "purple", "orange", "red", "teal"],
             command=self.change_theme_color, width=180
         )
         self.theme_menu.grid(row=10, column=0, padx=20, pady=(10, 20), sticky="s")
@@ -123,15 +125,18 @@ class MainWindow(ctk.CTk):
         self.search_button = ctk.CTkButton(self.search_frame, text="Search", command=self.perform_search, height=40)
         self.search_button.pack(side="left", padx=(0, 10))
 
-        self.refresh_button = ctk.CTkButton(self.search_frame, text="🔄 Refresh", command=self.manual_refresh, height=40, width=85, fg_color="gray30", hover_color="gray40")
+        self.refresh_button = ctk.CTkButton(self.search_frame, text="🔄 Refresh", command=self.manual_refresh, height=40, width=85)
         self.refresh_button.pack(side="left", padx=(0, 15))
 
         self.speed_label = ctk.CTkLabel(self.search_frame, text="Limit (Mbps):", font=("Arial", 11, "bold"))
         self.speed_label.pack(side="left", padx=(0, 5))
 
-        self.speed_entry = ctk.CTkEntry(self.search_frame, width=70, height=40)
+        self.speed_entry = ctk.CTkEntry(self.search_frame, width=60, height=40)
         self.speed_entry.pack(side="left", padx=(0, 5))
         self.speed_entry.insert(0, "250")
+
+        self.speed_apply_btn = ctk.CTkButton(self.search_frame, text="Apply", command=self.apply_speed_limit, height=40, width=60)
+        self.speed_apply_btn.pack(side="left", padx=(0, 15))
 
         # Scrollable Display Grid for Games / Content
         self.results_scroll = ctk.CTkScrollableFrame(self.main_frame)
@@ -185,8 +190,32 @@ class MainWindow(ctk.CTk):
         self.check_rd_account()
 
     def change_theme_color(self, new_theme):
-        """Swaps customtkinter global accent color theme dynamically."""
-        ctk.set_default_color_theme(new_theme)
+        """Swaps custom theme accents dynamically and updates active UI elements."""
+        theme_accents = {
+            "blue": "#1f6aa5",
+            "dark-blue": "#11305C",
+            "green": "#2fa572",
+            "purple": "#7c3aed",
+            "orange": "#ea580c",
+            "red": "#dc2626",
+            "teal": "#0d9488"
+        }
+        accent_color = theme_accents.get(new_theme, "#1f6aa5")
+        self.current_accent = accent_color
+        
+        try:
+            ctk.set_default_color_theme("blue")  # fallback base theme
+        except Exception:
+            pass
+
+        # Dynamically update existing main primary buttons
+        for btn in [self.search_button, self.refresh_button, self.speed_apply_btn, self.api_save_btn]:
+            try:
+                btn.configure(fg_color=self.current_accent)
+            except Exception:
+                pass
+
+        # Re-render or refresh current view so newly built cards pick up the accent
         if self.current_view == "recent":
             self.show_startup_recent()
         elif self.current_view == "popular":
@@ -197,6 +226,15 @@ class MainWindow(ctk.CTk):
             self.show_downloads_view()
         elif self.current_view == "history":
             self.show_history_view()
+
+    def update_nav_highlight(self, active_btn):
+        """Highlights the active navigation button using theme accent and resets others."""
+        nav_buttons = [self.nav_home, self.nav_games, self.nav_upcoming, self.nav_downloads, self.nav_history]
+        for btn in nav_buttons:
+            if btn == active_btn:
+                btn.configure(fg_color=self.current_accent, border_color=self.current_accent, border_width=2, text_color="white")
+            else:
+                btn.configure(fg_color="transparent", border_color=("gray70", "gray30"), border_width=2, text_color=("gray10", "#DCE4EE"))
 
 
     # =====================================================================
@@ -231,12 +269,23 @@ class MainWindow(ctk.CTk):
     # --- VIEW ROUTING & CONTENT LOADERS ---
     # =====================================================================
     def show_startup_recent(self):
-        """Renders the Home view displaying newly posted repacks."""
+        """Renders the Recent Repacks view."""
         self.current_view = "recent"
+        self.update_nav_highlight(self.nav_home)
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
         self.results_scroll.grid_columnconfigure((0, 1, 2, 3), weight=1)
-        ctk.CTkLabel(self.results_scroll, text="Loading latest repacks...").grid(row=0, column=0, columnspan=4, pady=20)
+        
+        notice_lbl = ctk.CTkLabel(
+            self.results_scroll, 
+            text="💡 Make sure to hit the Refresh button to get the latest updated repacks; otherwise, you may be seeing old cached ones.", 
+            text_color="#93c5fd", 
+            font=("Arial", 11, "italic"),
+            wraplength=850
+        )
+        notice_lbl.grid(row=0, column=0, columnspan=4, pady=(5, 15), sticky="w")
+
+        ctk.CTkLabel(self.results_scroll, text="Loading latest repacks...").grid(row=1, column=0, columnspan=4, pady=20)
         threading.Thread(target=self._load_recent_thread, args=(False,), daemon=True).start()
 
     def _load_recent_thread(self, force_refresh):
@@ -246,6 +295,7 @@ class MainWindow(ctk.CTk):
     def show_game_repacks(self):
         """Renders the Most Popular Repacks of the Week view."""
         self.current_view = "popular"
+        self.update_nav_highlight(self.nav_games)
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
         self.results_scroll.grid_columnconfigure((0, 1, 2, 3), weight=1)
@@ -259,6 +309,7 @@ class MainWindow(ctk.CTk):
     def show_upcoming_view(self):
         """Renders the upcoming game release schedule view."""
         self.current_view = "upcoming"
+        self.update_nav_highlight(self.nav_upcoming)
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
         self.results_scroll.grid_columnconfigure((0, 1, 2, 3), weight=0)
@@ -303,7 +354,15 @@ class MainWindow(ctk.CTk):
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
         if self.current_view == "recent":
-            ctk.CTkLabel(self.results_scroll, text="Force-refreshing latest repacks...").grid(row=0, column=0, columnspan=4, pady=20)
+            notice_lbl = ctk.CTkLabel(
+                self.results_scroll, 
+                text="💡 Make sure to hit the Refresh button to get the latest updated repacks; otherwise, you may be seeing old cached ones.", 
+                text_color="#93c5fd", 
+                font=("Arial", 11, "italic"),
+                wraplength=850
+            )
+            notice_lbl.grid(row=0, column=0, columnspan=4, pady=(5, 15), sticky="w")
+            ctk.CTkLabel(self.results_scroll, text="Force-refreshing latest repacks...").grid(row=1, column=0, columnspan=4, pady=20)
             threading.Thread(target=self._load_recent_thread, args=(True,), daemon=True).start()
         elif self.current_view == "popular":
             ctk.CTkLabel(self.results_scroll, text="Scraping fresh weekly popular repacks...").grid(row=0, column=0, columnspan=4, pady=20)
@@ -312,12 +371,17 @@ class MainWindow(ctk.CTk):
             self.show_upcoming_view()
 
     def _update_grid_safely(self, results):
-        for widget in self.results_scroll.winfo_children(): 
+        for widget in self.results_scroll.winfo_children():
+            if isinstance(widget, ctk.CTkLabel) and "Make sure to hit the Refresh" in widget.cget("text"):
+                continue
             widget.destroy()
+
         if not results:
-            ctk.CTkLabel(self.results_scroll, text="No games found or failed to load.").grid(row=0, column=0, columnspan=4, pady=20)
+            ctk.CTkLabel(self.results_scroll, text="No games found or failed to load.").grid(row=2, column=0, columnspan=4, pady=20)
             return
-        self.populate_grid(results)
+        
+        start_row = 2 if self.current_view == "recent" else 0
+        self.populate_grid(results, start_row=start_row)
 
     def perform_search(self):
         """Executes site query search based on user text entry."""
@@ -335,12 +399,22 @@ class MainWindow(ctk.CTk):
         results = search_fitgirl_api(query)
         self.after(0, lambda: self._update_grid_safely(results))
 
+    def apply_speed_limit(self):
+        """Applies the current speed limit entry value to active download threads."""
+        try:
+            limit_val = float(self.speed_entry.get())
+        except ValueError:
+            limit_val = None
+
+        downloader_engine.update_speed_limit(limit_val)
+        print(f"Speed limit updated to: {limit_val} Mbps")
+
 
     # =====================================================================
     # --- GAME CARD & GRID RENDERING SYSTEM ---
     # =====================================================================
-    def populate_grid(self, results):
-        row_idx = 0
+    def populate_grid(self, results, start_row=0):
+        row_idx = start_row
         col_idx = 0
         for game in results:
             self._build_game_card(game, row_idx, col_idx)
@@ -364,8 +438,13 @@ class MainWindow(ctk.CTk):
             threading.Thread(target=self._load_card_image, args=(game['image'], img_lbl), daemon=True).start()
 
         game_url = game.get('link', game.get('url', ''))
-        btn = ctk.CTkButton(card, text="Download", command=lambda m=game['magnet'], u=game_url: self.start_download(m, u))
-        btn.pack(pady=(10, 10), padx=10)
+        
+        # Download button styled with active theme accent color
+        btn = ctk.CTkButton(card, text="Download", fg_color=self.current_accent, command=lambda m=game['magnet']: self.start_download(m))
+        btn.pack(pady=(10, 2), padx=10)
+
+        details_btn = ctk.CTkButton(card, text="📋 Features & Details", fg_color="gray30", hover_color="gray40", command=lambda u=game_url, t=game['title']: self.open_details_dialog(u, t))
+        details_btn.pack(pady=(2, 10), padx=10)
 
     def _load_card_image(self, img_url, img_lbl):
         """Asynchronously downloads, formats, and renders game grid poster thumbnails with CDN fallback support."""
@@ -402,6 +481,7 @@ class MainWindow(ctk.CTk):
     def show_downloads_view(self):
         """Renders active download progress queue manager view."""
         self.current_view = "downloads"
+        self.update_nav_highlight(self.nav_downloads)
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
         self.results_scroll.grid_columnconfigure(0, weight=1)
@@ -421,6 +501,7 @@ class MainWindow(ctk.CTk):
     def show_history_view(self):
         """Renders completed download archives history view."""
         self.current_view = "history"
+        self.update_nav_highlight(self.nav_history)
         for widget in self.results_scroll.winfo_children(): 
             widget.destroy()
         self.results_scroll.grid_columnconfigure(0, weight=1)
@@ -446,7 +527,7 @@ class MainWindow(ctk.CTk):
             date_lbl = ctk.CTkLabel(card, text=f"Completed: {item['date']}", font=("Arial", 11), text_color="gray")
             date_lbl.grid(row=1, column=0, padx=15, pady=(0, 10), sticky="w")
 
-            folder_btn = ctk.CTkButton(card, text="📁 Open Folder", width=120, 
+            folder_btn = ctk.CTkButton(card, text="📁 Open Folder", width=120, fg_color=self.current_accent,
                                        command=lambda path=item['path']: self.open_file_folder(path))
             folder_btn.grid(row=0, column=1, rowspan=2, padx=15, pady=10, sticky="e")
 
@@ -476,23 +557,47 @@ class MainWindow(ctk.CTk):
         btn_frame = ctk.CTkFrame(card, fg_color="transparent")
         btn_frame.grid(row=2, column=1, padx=10, pady=(0, 12), sticky="e")
 
-        stop_btn = ctk.CTkButton(btn_frame, text="Stop", width=75, fg_color="#b30000", hover_color="#800000",
+        # --- Pause Button ---
+        pause_btn = ctk.CTkButton(btn_frame, text="Pause", width=65, fg_color="#d97706", hover_color="#b45309",
+                                  command=lambda did=download_id: self.pause_download_action(did))
+        pause_btn.pack(side="left", padx=3)
+
+        # --- Resume Button ---
+        resume_btn = ctk.CTkButton(btn_frame, text="Resume", width=65, fg_color=self.current_accent, command=lambda did=download_id: self.resume_download_action(did))
+        resume_btn.pack(side="left", padx=3)
+
+        # --- Stop Button ---
+        stop_btn = ctk.CTkButton(btn_frame, text="Stop", width=65, fg_color="#b30000", hover_color="#800000",
                                  command=lambda did=download_id: self.stop_download_action(did))
-        stop_btn.pack(side="left", padx=4)
+        stop_btn.pack(side="left", padx=3)
 
-        delete_btn = ctk.CTkButton(btn_frame, text="🗑 Delete", width=85, fg_color="gray40", hover_color="gray50",
+        # --- Delete Button ---
+        delete_btn = ctk.CTkButton(btn_frame, text="🗑 Delete", width=75, fg_color="gray40", hover_color="gray50",
                                    command=lambda did=download_id: self.delete_download_action(did))
-        delete_btn.pack(side="left", padx=4)
+        delete_btn.pack(side="left", padx=3)
 
-        data['widgets'] = {'status': status_lbl, 'pbar': pbar, 'stop_btn': stop_btn, 'delete_btn': delete_btn}
+        data['widgets'] = {'status': status_lbl, 'pbar': pbar, 'pause_btn': pause_btn, 'resume_btn': resume_btn, 'stop_btn': stop_btn, 'delete_btn': delete_btn}
 
-    def update_download_progress(self, download_id, filename, progress, speed):
+    def update_download_progress(self, download_id, filename, progress, speed, eta_seconds=0):
         if download_id in self.active_downloads:
             self.active_downloads[download_id].update({
                 'filename': filename,
                 'progress': progress,
-                'speed': speed
+                'speed': speed,
+                'eta': eta_seconds
             })
+
+    def format_time(self, seconds):
+        if seconds <= 0:
+            return "Calculations..."
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        if h > 0:
+            return f"{h}h {m}m {s}s"
+        elif m > 0:
+            return f"{m}m {s}s"
+        else:
+            return f"{s}s"
 
     def stop_download_action(self, download_id):
         downloader_engine.stop_download(download_id)
@@ -518,6 +623,20 @@ class MainWindow(ctk.CTk):
             del self.active_downloads[download_id]
             self.show_downloads_view()
 
+    def pause_download_action(self, download_id):
+        downloader_engine.pause_download(download_id)
+        if download_id in self.active_downloads:
+            if 'widgets' in self.active_downloads[download_id]:
+                w = self.active_downloads[download_id]['widgets']
+                w['status'].configure(text="Paused by user", text_color="orange")
+
+    def resume_download_action(self, download_id):
+        downloader_engine.resume_download(download_id)
+        if download_id in self.active_downloads:
+            if 'widgets' in self.active_downloads[download_id]:
+                w = self.active_downloads[download_id]['widgets']
+                w['status'].configure(text="Resuming download...", text_color="green")
+
     def _poll_downloads_view(self):
         if self.current_view == "downloads" and self.active_downloads:
             for download_id, data in self.active_downloads.items():
@@ -525,12 +644,19 @@ class MainWindow(ctk.CTk):
                     widgets = data['widgets']
                     prog = data.get('progress', 0)
                     spd = data.get('speed', 0)
+                    eta = data.get('eta', 0)
+                    
                     widgets['pbar'].set(prog)
-                    status_text = f"Speed: {round(spd, 2)} Mbps — {int(prog * 100)}%"
+                    
+                    time_str = self.format_time(eta)
+                    status_text = f"Speed: {round(spd, 2)} Mbps — {int(prog * 100)}% — ETA: {time_str}"
+                    
                     if prog >= 1.0:
                         widgets['status'].configure(text="Download Complete & Extracted!", text_color="green")
+                        if 'pause_btn' in widgets:
+                            widgets['pause_btn'].configure(state="disabled")
                         widgets['stop_btn'].configure(state="disabled")
-                    elif widgets['status'].cget("text") != "Stopped by user":
+                    elif widgets['status'].cget("text") != "Paused by user" and widgets['status'].cget("text") != "Stopped by user":
                         widgets['status'].configure(text=status_text)
                         
         self.after(500, self._poll_downloads_view)
@@ -550,7 +676,7 @@ class MainWindow(ctk.CTk):
     # =====================================================================
     # --- REAL-DEBRID TORRENT & FILE SELECTION DIALOG ---
     # =====================================================================
-    def start_download(self, magnet_link, game_url=None):
+    def start_download(self, magnet_link):
         loading_popup = ctk.CTkToplevel(self)
         loading_popup.geometry("300x150")
         loading_popup.title("Fetching Files...")
@@ -558,9 +684,9 @@ class MainWindow(ctk.CTk):
         
         ctk.CTkLabel(loading_popup, text="Contacting Real-Debrid...\nAnalyzing torrent contents.", font=("Arial", 12)).pack(expand=True, padx=20, pady=20)
         
-        threading.Thread(target=self._fetch_torrent_info_thread, args=(magnet_link, game_url, loading_popup), daemon=True).start()
+        threading.Thread(target=self._fetch_torrent_info_thread, args=(magnet_link, loading_popup), daemon=True).start()
 
-    def _fetch_torrent_info_thread(self, magnet_link, game_url, loading_popup):
+    def _fetch_torrent_info_thread(self, magnet_link, loading_popup):
         torrent_info = add_magnet_get_info(magnet_link, self.get_current_api_key())
         loading_popup.destroy()
         
@@ -568,25 +694,19 @@ class MainWindow(ctk.CTk):
             print("Failed to fetch torrent information.")
             return
             
-        self.after(0, lambda: self.open_file_selection_dialog(torrent_info, game_url))
+        self.after(0, lambda: self.open_file_selection_dialog(torrent_info))
 
-    def open_file_selection_dialog(self, torrent_info, game_url=None):
+    def open_file_selection_dialog(self, torrent_info):
         dialog = ctk.CTkToplevel(self)
-        dialog.geometry("700x580")
-        dialog.title(f"Download & Repack Details — {torrent_info['filename']}")
+        dialog.geometry("700x520")
+        dialog.title(f"Select Files — {torrent_info['filename']}")
         dialog.grab_set()
 
-        tabview = ctk.CTkTabview(dialog)
-        tabview.pack(padx=15, pady=(5, 15), fill="both", expand=True)
+        # --- File Selection UI ---
+        ctk.CTkLabel(dialog, text=torrent_info['filename'], font=("Arial", 14, "bold")).pack(pady=(15, 2))
+        ctk.CTkLabel(dialog, text="Uncheck any optional bins, language packs, or bonuses you don't want:", text_color="gray").pack(pady=(0, 10))
 
-        tab_files = tabview.add("📁 Select Files")
-        tab_details = tabview.add("📋 Repack Features & Details")
-
-        # --- Tab 1: File Selection UI ---
-        ctk.CTkLabel(tab_files, text=torrent_info['filename'], font=("Arial", 14, "bold")).pack(pady=(10, 2))
-        ctk.CTkLabel(tab_files, text="Uncheck any optional bins, language packs, or bonuses you don't want:", text_color="gray").pack(pady=(0, 10))
-
-        scroll_frame = ctk.CTkScrollableFrame(tab_files, width=620, height=320)
+        scroll_frame = ctk.CTkScrollableFrame(dialog, width=620, height=320)
         scroll_frame.pack(padx=10, pady=5, fill="both", expand=True)
 
         checkbox_vars = []
@@ -613,12 +733,18 @@ class MainWindow(ctk.CTk):
 
             threading.Thread(target=self._finalize_download_thread, args=(torrent_info['id'], selected_ids, limit_val), daemon=True).start()
 
-        confirm_btn = ctk.CTkButton(tab_files, text="Start Torrent Download", command=confirm_selection, fg_color="green", hover_color="darkgreen", height=40)
-        confirm_btn.pack(pady=12)
+        confirm_btn = ctk.CTkButton(dialog, text="Start Torrent Download", fg_color=self.current_accent, command=confirm_selection, height=40)
+        confirm_btn.pack(pady=15)
 
-        # --- Tab 2: Live Web Scraping & Details UI ---
-        details_scroll = ctk.CTkScrollableFrame(tab_details)
-        details_scroll.pack(padx=10, pady=10, fill="both", expand=True)
+    def open_details_dialog(self, game_url, game_title):
+        """Opens a dedicated pop-up window to view live scraped repack features and details."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.geometry("700x580")
+        dialog.title(f"Repack Features & Details — {game_title}")
+        dialog.grab_set()
+
+        details_scroll = ctk.CTkScrollableFrame(dialog)
+        details_scroll.pack(padx=15, pady=15, fill="both", expand=True)
 
         loading_label = ctk.CTkLabel(
             details_scroll, 
@@ -677,25 +803,42 @@ class MainWindow(ctk.CTk):
             self.after(0, lambda: self._render_live_details(parsed_items, scroll_frame, loading_label))
             
         except Exception as e:
-            self.after(0, lambda: loading_label.configure(text=f"Error fetching live details: {e}"))
+            err_msg = str(e)
+            self.after(0, lambda: loading_label.configure(text=f"Error fetching live details: {err_msg}"))
 
     def _render_live_details(self, parsed_items, scroll_frame, loading_label):
-        loading_label.destroy()
+        try:
+            if not scroll_frame.winfo_exists():
+                return
+            loading_label.destroy()
+        except Exception:
+            return
         
         for item in parsed_items:
-            if item['type'] == 'text':
-                lbl = ctk.CTkLabel(scroll_frame, text=item['content'], justify="left", wraplength=600, font=("Arial", 12))
-                lbl.pack(anchor="nw", padx=10, pady=(0, 15))
-            elif item['type'] == 'image':
-                img_lbl = ctk.CTkLabel(scroll_frame, text="Loading image...")
-                img_lbl.pack(anchor="nw", padx=10, pady=(0, 15))
-                threading.Thread(target=self._load_detail_image, args=(item['url'], img_lbl), daemon=True).start()
+            try:
+                if not scroll_frame.winfo_exists():
+                    break
+                if item['type'] == 'text':
+                    lbl = ctk.CTkLabel(scroll_frame, text=item['content'], justify="left", wraplength=600, font=("Arial", 12))
+                    lbl.pack(anchor="nw", padx=10, pady=(0, 15))
+                elif item['type'] == 'image':
+                    img_lbl = ctk.CTkLabel(scroll_frame, text="Loading image...")
+                    img_lbl.pack(anchor="nw", padx=10, pady=(0, 15))
+                    threading.Thread(target=self._load_detail_image, args=(item['url'], img_lbl), daemon=True).start()
+            except Exception:
+                pass
 
     def _load_detail_image(self, img_url, img_lbl):
-        """Asynchronously loads, scales, and renders detailed game view images."""
+        """Asynchronously loads, scales, and renders detailed game view images safely."""
         try:
+            try:
+                if not img_lbl.winfo_exists():
+                    return
+            except Exception:
+                return
+
             if not img_url:
-                self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
+                self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]") if img_lbl.winfo_exists() else None)
                 return
             
             if img_url.startswith("http://"):
@@ -710,7 +853,6 @@ class MainWindow(ctk.CTk):
             }
             
             response = requests.get(img_url, stream=True, timeout=8, headers=headers)
-            print(f"Image URL: {img_url} | Status: {response.status_code}")
             
             if response.status_code == 200:
                 try:
@@ -724,16 +866,23 @@ class MainWindow(ctk.CTk):
                         new_size = (width, height)
                         
                     ctk_img = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=new_size)
-                    self.after(0, lambda: img_lbl.configure(image=ctk_img, text=""))
+                    
+                    def update_widget():
+                        if img_lbl.winfo_exists():
+                            img_lbl.configure(image=ctk_img, text="")
+                    self.after(0, update_widget)
                 except Exception as img_err:
                     print(f"PIL Image Decode Failed for {img_url}: {img_err}")
-                    self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
+                    self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]") if img_lbl.winfo_exists() else None)
             else:
-                print(f"Image URL: {img_url} | Failed Status: {response.status_code}")
-                self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
+                self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]") if img_lbl.winfo_exists() else None)
         except Exception as e:
             print(f"Failed Image URL: {img_url} | Error: {e}")
-            self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
+            try:
+                if img_lbl.winfo_exists():
+                    self.after(0, lambda: img_lbl.configure(text="[Image Failed to Load]"))
+            except Exception:
+                pass
 
     def _finalize_download_thread(self, torrent_id, selected_ids, speed_limit):
         print(f"Sending selected files to Real-Debrid...")
@@ -745,10 +894,13 @@ class MainWindow(ctk.CTk):
         print(f"Queuing {len(download_links)} files...")
         for link in download_links:
             download_id = str(abs(hash(link)))
+            raw_filename = link.split('/')[-1].split('?')[0]
+            clean_filename = urllib.parse.unquote(raw_filename)
             self.active_downloads[download_id] = {
-                'filename': link.split('/')[-1].split('?')[0], 
+                'filename': clean_filename, 
                 'progress': 0.0, 
-                'speed': 0.0
+                'speed': 0.0,
+                'eta': 0
             }
 
         downloader_engine.add_to_queue(

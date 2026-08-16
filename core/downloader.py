@@ -24,7 +24,7 @@ except ImportError:
 HISTORY_FILE = "download_history.json"
 
 def load_history():
-    """Loads completed download history logs from disk[cite: 6]."""
+    """Loads completed download history logs from disk."""
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r") as f:
@@ -34,7 +34,7 @@ def load_history():
     return []
 
 def save_history_item(item):
-    """Appends a completed download record to history storage[cite: 6]."""
+    """Appends a completed download record to history storage."""
     history = load_history()
     history.insert(0, item)
     try:
@@ -53,14 +53,22 @@ class FileDownloader:
         self.download_queue = []
         self.is_processing_queue = False
         self.queue_lock = threading.Lock()
+        self.paused_downloads = {}
+        self.pause_events = {}
+        self.speed_limit_mbps = None
+        self.pause_start_times = {}
+        self.total_paused_durations = {}
+        self.speed_adjustment_baselines = {}
 
     def add_to_queue(self, download_tasks, speed_limit=None, progress_callback=None, queue_complete_callback=None):
-        """Appends multiple download links to the queue and starts processing worker[cite: 6]."""
+        """Appends multiple download links to the queue and starts processing worker."""
+        if speed_limit is not None:
+            self.speed_limit_mbps = speed_limit
+
         with self.queue_lock:
             for link in download_tasks:
                 self.download_queue.append({
                     "url": link,
-                    "speed_limit": speed_limit,
                     "progress_callback": progress_callback
                 })
         
@@ -69,7 +77,7 @@ class FileDownloader:
             threading.Thread(target=self._process_queue_loop, daemon=True).start()
 
     def _process_queue_loop(self):
-        """Worker loop that sequentially handles queued file downloads[cite: 6]."""
+        """Worker loop that sequentially handles queued file downloads."""
         self.is_processing_queue = True
         while True:
             with self.queue_lock:
@@ -82,12 +90,31 @@ class FileDownloader:
 
             self.download_file(
                 url=task["url"],
-                speed_limit_mbps=task["speed_limit"],
                 progress_callback=task["progress_callback"]
             )
 
-    def download_file(self, url, save_folder="Downloads", speed_limit_mbps=None, progress_callback=None, download_id=None):
-        """Downloads a single file with bandwidth shaping, progress updates, and auto-extraction[cite: 6]."""
+    def pause_download(self, download_id):
+        """Pauses an active download thread."""
+        if download_id in self.active_downloads:
+            self.paused_downloads[download_id] = True
+            self.pause_start_times[download_id] = time.time()
+            if download_id in self.pause_events:
+                self.pause_events[download_id].clear()
+
+    def resume_download(self, download_id):
+        """Resumes a paused download thread and adjusts pause duration offsets."""
+        if download_id in self.active_downloads:
+            self.paused_downloads[download_id] = False
+            
+            if download_id in self.pause_start_times:
+                paused_duration = time.time() - self.pause_start_times[download_id]
+                self.total_paused_durations[download_id] = self.total_paused_durations.get(download_id, 0.0) + paused_duration
+                
+            if download_id in self.pause_events:
+                self.pause_events[download_id].set()
+
+    def download_file(self, url, save_folder="Downloads", progress_callback=None, download_id=None):
+        """Downloads a single file with dynamic bandwidth shaping, progress updates, and auto-extraction."""
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
             
@@ -100,11 +127,16 @@ class FileDownloader:
         if not download_id:
             download_id = str(abs(hash(url)))
 
-        bytes_per_sec = None
-        if speed_limit_mbps and speed_limit_mbps > 0:
-            bytes_per_sec = int((speed_limit_mbps * 1_000_000) / 8)
-
         self.active_downloads[download_id] = True
+        
+        # Setup pause event tracking
+        pause_event = threading.Event()
+        pause_event.set()
+        self.pause_events[download_id] = pause_event
+        self.paused_downloads[download_id] = False
+        self.total_paused_durations[download_id] = 0.0
+        self.speed_adjustment_baselines[download_id] = False
+
         target_open_path = file_path
 
         try:
@@ -120,26 +152,57 @@ class FileDownloader:
                     for chunk in r.iter_content(chunk_size=chunk_size):
                         if not self.active_downloads.get(download_id, True):
                             return None
+                            
+                        # Respect pause state
+                        pause_event.wait()
+
                         if not chunk:
                             continue
                             
+                        # --- Dynamic On-The-Fly Speed Shaping Timing Reset (Preserves Progress) ---
+                        if self.speed_adjustment_baselines.get(download_id, False):
+                            # Reset start time and pause duration relative to current downloaded bytes
+                            self.total_paused_durations[download_id] = 0.0
+                            start_time = time.time()
+                            if self.speed_limit_mbps and self.speed_limit_mbps > 0:
+                                bytes_per_sec = int((self.speed_limit_mbps * 1_000_000) / 8)
+                                if bytes_per_sec > 0:
+                                    # Anchor start_time back so elapsed time accurately reflects the new speed limit rate
+                                    start_time = time.time() - (downloaded / bytes_per_sec)
+                            self.speed_adjustment_baselines[download_id] = False
+
                         f.write(chunk)
                         downloaded += len(chunk)
                         
+                        # Calculate elapsed time accurately by subtracting total pause durations
+                        paused_offset = self.total_paused_durations.get(download_id, 0.0)
+                        elapsed = (time.time() - start_time) - paused_offset
+                        if elapsed <= 0:
+                            elapsed = 0.001
+
                         if progress_callback and total_size > 0:
                             percent = min(float(downloaded / total_size), 1.0)
-                            elapsed = time.time() - start_time
                             speed_mbps = (downloaded * 8) / (elapsed * 1_000_000) if elapsed > 0 else 0
-                            progress_callback(download_id, local_filename, percent, speed_mbps)
+                            
+                            # --- Accurate ETA Calculation ---
+                            eta_seconds = 0
+                            if speed_mbps > 0:
+                                remaining_bytes = total_size - downloaded
+                                remaining_bits = remaining_bytes * 8
+                                speed_bps = speed_mbps * 1_000_000
+                                eta_seconds = int(remaining_bits / speed_bps)
+
+                            progress_callback(download_id, local_filename, percent, speed_mbps, eta_seconds)
                         
-                        if bytes_per_sec:
-                            elapsed = time.time() - start_time
-                            expected_time = downloaded / bytes_per_sec
+                        # --- Dynamic On-The-Fly Speed Shaping Sleep ---
+                        if self.speed_limit_mbps and self.speed_limit_mbps > 0:
+                            bytes_per_sec = int((self.speed_limit_mbps * 1_000_000) / 8)
+                            expected_time = downloaded / bytes_per_sec if bytes_per_sec > 0 else 0
                             if expected_time > elapsed:
                                 time.sleep(expected_time - elapsed)
                                 
             if progress_callback:
-                progress_callback(download_id, local_filename, 1.0, 0)
+                progress_callback(download_id, local_filename, 1.0, 0, 0)
 
             # Auto-Extract Utility & set target folder for history
             if file_path.lower().endswith(('.zip', '.rar', '.7z')):
@@ -170,10 +233,26 @@ class FileDownloader:
         finally:
             if download_id in self.active_downloads:
                 del self.active_downloads[download_id]
+            if download_id in self.pause_events:
+                del self.pause_events[download_id]
+            if download_id in self.paused_downloads:
+                del self.paused_downloads[download_id]
+            if download_id in self.total_paused_durations:
+                del self.total_paused_durations[download_id]
+            if download_id in self.speed_adjustment_baselines:
+                del self.speed_adjustment_baselines[download_id]
 
     def stop_download(self, download_id):
-        """Halts an active download thread[cite: 6]."""
+        """Halts an active download thread."""
         if download_id in self.active_downloads:
             self.active_downloads[download_id] = False
+            if download_id in self.pause_events:
+                self.pause_events[download_id].set()
+
+    def update_speed_limit(self, new_limit):
+        """Dynamically updates the speed limit and triggers baseline timer adjustment for active downloads."""
+        self.speed_limit_mbps = new_limit
+        for download_id in self.active_downloads.keys():
+            self.speed_adjustment_baselines[download_id] = True
 
 downloader_engine = FileDownloader()

@@ -1,12 +1,13 @@
 # =====================================================================
 # --- IMPORTS & DEPENDENCIES ---
 # =====================================================================
-import requests
-from bs4 import BeautifulSoup
+import os
 import html
 import json
-import os
+import requests
+from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 # =====================================================================
 # --- CONFIGURATION & ENDPOINTS ---
@@ -53,7 +54,6 @@ def search_fitgirl_api(query):
             img_tag = soup.find('img')
             if img_tag:
                 img_url = img_tag.get('src') or img_tag.get('data-src') or img_tag.get('data-lazy-src')
-                print(f"Title: {title} | Image Tag Found: {img_tag}")
             
             if magnet_link:
                 results.append({
@@ -113,7 +113,6 @@ def fetch_and_update_cache():
             img_tag = soup.find('img')
             if img_tag:
                 img_url = img_tag.get('src') or img_tag.get('data-src') or img_tag.get('data-lazy-src')
-                print(f"Title: {title} | Image Tag Found: {img_tag}")
 
             if title and magnet_link:
                 results.append({
