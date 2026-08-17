@@ -369,6 +369,8 @@ class MainWindow(ctk.CTk):
             threading.Thread(target=self._load_popular_thread, args=(True,), daemon=True).start()
         elif self.current_view == "upcoming":
             self.show_upcoming_view()
+        elif self.current_view == "downloads":
+            self.show_downloads_view()
 
     def _update_grid_safely(self, results):
         for widget in self.results_scroll.winfo_children():
@@ -448,10 +450,12 @@ class MainWindow(ctk.CTk):
         details_btn.pack(pady=(2, 10), padx=10)
 
     def _load_card_image(self, img_url, img_lbl):
-        """Asynchronously downloads, formats, and renders game grid poster thumbnails with CDN fallback support."""
+        """Asynchronously downloads, formats, and renders game grid poster thumbnails with CDN fallback support safely."""
         try:
+            if not img_lbl.winfo_exists():
+                return
             if not img_url:
-                self.after(0, lambda: img_lbl.configure(text="", image=None))
+                self.after(0, lambda: img_lbl.configure(text="", image=None) if img_lbl.winfo_exists() else None)
                 return
 
             if img_url.startswith("http://"):
@@ -469,18 +473,22 @@ class MainWindow(ctk.CTk):
             if response.status_code == 200:
                 img_data = Image.open(io.BytesIO(response.content))
                 ctk_img = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=(150, 200))
-                self.after(0, lambda: img_lbl.configure(image=ctk_img, text=""))
+                self.after(0, lambda: img_lbl.configure(image=ctk_img, text="") if img_lbl.winfo_exists() else None)
             else:
-                self.after(0, lambda: img_lbl.configure(text="", image=None))
+                self.after(0, lambda: img_lbl.configure(text="", image=None) if img_lbl.winfo_exists() else None)
         except Exception:
-            self.after(0, lambda: img_lbl.configure(text="", image=None))
+            try:
+                if img_lbl.winfo_exists():
+                    self.after(0, lambda: img_lbl.configure(text="", image=None))
+            except Exception:
+                pass
 
 
     # =====================================================================
     # --- DOWNLOAD MANAGER & QUEUE SYSTEM ---
     # =====================================================================
     def show_downloads_view(self):
-        """Renders active download progress queue manager view."""
+        """Renders active download progress queue manager view safely."""
         self.current_view = "downloads"
         self.update_nav_highlight(self.nav_downloads)
         for widget in self.results_scroll.winfo_children(): 
@@ -547,13 +555,18 @@ class MainWindow(ctk.CTk):
         lbl = ctk.CTkLabel(card, text=data.get('filename', 'Unknown file'), font=("Arial", 12, "bold"))
         lbl.grid(row=0, column=0, padx=15, pady=(10, 2), sticky="w")
 
-        status_text = f"Speed: {round(data.get('speed', 0), 2)} Mbps — {int(data.get('progress', 0) * 100)}%"
+        prog = data.get('progress', 0)
+        spd = data.get('speed', 0)
+        eta = data.get('eta', 0)
+        time_str = self.format_time(eta)
+        status_text = f"Speed: {round(spd, 2)} Mbps — {int(prog * 100)}% — ETA: {time_str}"
+        
         status_lbl = ctk.CTkLabel(card, text=status_text, font=("Arial", 11), text_color="gray")
         status_lbl.grid(row=1, column=0, padx=15, pady=(0, 5), sticky="w")
 
         pbar = ctk.CTkProgressBar(card, width=480)
         pbar.grid(row=2, column=0, padx=15, pady=(0, 12), sticky="w")
-        pbar.set(data.get('progress', 0))
+        pbar.set(prog)
 
         btn_frame = ctk.CTkFrame(card, fg_color="transparent")
         btn_frame.grid(row=2, column=1, padx=10, pady=(0, 12), sticky="e")
@@ -606,9 +619,14 @@ class MainWindow(ctk.CTk):
             self.active_downloads[download_id]['progress'] = 0
             self.active_downloads[download_id]['speed'] = 0
             if 'widgets' in self.active_downloads[download_id]:
-                w = self.active_downloads[download_id]['widgets']
-                w['status'].configure(text="Stopped by user", text_color="orange")
-                w['stop_btn'].configure(state="disabled")
+                try:
+                    w = self.active_downloads[download_id]['widgets']
+                    if w['status'].winfo_exists():
+                        w['status'].configure(text="Stopped by user", text_color="orange")
+                    if w['stop_btn'].winfo_exists():
+                        w['stop_btn'].configure(state="disabled")
+                except Exception:
+                    pass
 
     def delete_download_action(self, download_id):
         downloader_engine.stop_download(download_id)
@@ -622,43 +640,66 @@ class MainWindow(ctk.CTk):
                     except Exception:
                         pass
             del self.active_downloads[download_id]
-            self.show_downloads_view()
+            if self.current_view == "downloads":
+                self.show_downloads_view()
 
     def pause_download_action(self, download_id):
         downloader_engine.pause_download(download_id)
         if download_id in self.active_downloads:
             if 'widgets' in self.active_downloads[download_id]:
-                w = self.active_downloads[download_id]['widgets']
-                w['status'].configure(text="Paused by user", text_color="orange")
+                try:
+                    w = self.active_downloads[download_id]['widgets']
+                    if w['status'].winfo_exists():
+                        w['status'].configure(text="Paused by user", text_color="orange")
+                except Exception:
+                    pass
 
     def resume_download_action(self, download_id):
         downloader_engine.resume_download(download_id)
         if download_id in self.active_downloads:
             if 'widgets' in self.active_downloads[download_id]:
-                w = self.active_downloads[download_id]['widgets']
-                w['status'].configure(text="Resuming download...", text_color="green")
+                try:
+                    w = self.active_downloads[download_id]['widgets']
+                    if w['status'].winfo_exists():
+                        w['status'].configure(text="Resuming download...", text_color="green")
+                except Exception:
+                    pass
 
     def _poll_downloads_view(self):
-        if self.current_view == "downloads" and self.active_downloads:
-            for download_id, data in self.active_downloads.items():
-                if 'widgets' in data:
-                    widgets = data['widgets']
-                    prog = data.get('progress', 0)
-                    spd = data.get('speed', 0)
-                    eta = data.get('eta', 0)
-                    
-                    widgets['pbar'].set(prog)
-                    
-                    time_str = self.format_time(eta)
-                    status_text = f"Speed: {round(spd, 2)} Mbps — {int(prog * 100)}% — ETA: {time_str}"
-                    
-                    if prog >= 1.0:
-                        widgets['status'].configure(text="Download Complete & Extracted!", text_color="green")
-                        if 'pause_btn' in widgets:
-                            widgets['pause_btn'].configure(state="disabled")
-                        widgets['stop_btn'].configure(state="disabled")
-                    elif widgets['status'].cget("text") != "Paused by user" and widgets['status'].cget("text") != "Stopped by user":
-                        widgets['status'].configure(text=status_text)
+        try:
+            if self.current_view == "downloads":
+                has_cards = any(isinstance(w, ctk.CTkFrame) for w in self.results_scroll.winfo_children() if w.grid_info().get('row', 0) > 0)
+                if not has_cards and self.active_downloads:
+                    self.show_downloads_view()
+                
+                for download_id, data in self.active_downloads.items():
+                    if 'widgets' in data:
+                        widgets = data['widgets']
+                        prog = data.get('progress', 0)
+                        spd = data.get('speed', 0)
+                        eta = data.get('eta', 0)
+                        
+                        try:
+                            if widgets['pbar'].winfo_exists():
+                                widgets['pbar'].set(prog)
+                            
+                            time_str = self.format_time(eta)
+                            status_text = f"Speed: {round(spd, 2)} Mbps — {int(prog * 100)}% — ETA: {time_str}"
+                            
+                            if widgets['status'].winfo_exists():
+                                current_status = widgets['status'].cget("text")
+                                if prog >= 1.0:
+                                    widgets['status'].configure(text="Download Complete & Extracted!", text_color="green")
+                                    if 'pause_btn' in widgets and widgets['pause_btn'].winfo_exists():
+                                        widgets['pause_btn'].configure(state="disabled")
+                                    if 'stop_btn' in widgets and widgets['stop_btn'].winfo_exists():
+                                        widgets['stop_btn'].configure(state="disabled")
+                                elif current_status not in ["Paused by user", "Stopped by user"]:
+                                    widgets['status'].configure(text=status_text)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
                         
         self.after(500, self._poll_downloads_view)
 
@@ -689,7 +730,10 @@ class MainWindow(ctk.CTk):
 
     def _fetch_torrent_info_thread(self, magnet_link, loading_popup):
         torrent_info = add_magnet_get_info(magnet_link, self.get_current_api_key())
-        loading_popup.destroy()
+        try:
+            loading_popup.destroy()
+        except Exception:
+            pass
         
         if not torrent_info:
             print("Failed to fetch torrent information.")
@@ -725,7 +769,10 @@ class MainWindow(ctk.CTk):
 
         def confirm_selection():
             selected_ids = [fid for fid, var in checkbox_vars if var.get()]
-            dialog.destroy()
+            try:
+                dialog.destroy()
+            except Exception:
+                pass
             
             try:
                 limit_val = float(self.speed_entry.get())
@@ -768,7 +815,7 @@ class MainWindow(ctk.CTk):
                         break
 
             if not game_url:
-                self.after(0, lambda: loading_label.configure(text="No direct webpage URL available to scrape details for this item."))
+                self.after(0, lambda: loading_label.configure(text="No direct webpage URL available to scrape details for this item.") if loading_label.winfo_exists() else None)
                 return
 
             response = requests.get(game_url, headers=headers, timeout=10)
@@ -847,7 +894,7 @@ class MainWindow(ctk.CTk):
                         if clean_desc:
                             parsed_items.append({'type': 'text', 'content': clean_desc})
 
-                    # IF IT'S A NEW RELEASE FORMAT WHERE FEATURES FAILED TO PARSE, SHOW PROFESSIONAL NOTICE INSTEAD OF FALLING BACK TO RAW MIRRORS
+                    # Fallback check for new releases where features fail to parse
                     if len(parsed_items) <= 1 or not features_header:
                         parsed_items = [
                             parsed_items[0] if parsed_items else {'type': 'text', 'content': game_title},
@@ -869,13 +916,14 @@ class MainWindow(ctk.CTk):
             
         except Exception as e:
             err_msg = str(e)
-            self.after(0, lambda: loading_label.configure(text=f"Error fetching live details: {err_msg}"))
+            self.after(0, lambda: loading_label.configure(text=f"Error fetching live details: {err_msg}") if loading_label.winfo_exists() else None)
 
     def _render_live_details(self, parsed_items, scroll_frame, loading_label):
         try:
             if not scroll_frame.winfo_exists():
                 return
-            loading_label.destroy()
+            if loading_label.winfo_exists():
+                loading_label.destroy()
         except Exception:
             return
         
