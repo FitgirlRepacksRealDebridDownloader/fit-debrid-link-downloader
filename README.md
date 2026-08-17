@@ -47,7 +47,7 @@ Because this tool generates local configuration and tracking files at runtime, p
   * **Library & History Tracker:** View a comprehensive log of all completed downloads with quick-access **📁 Open Folder** buttons.
 * **Speed Limiter:** Fine-tune your bandwidth using the built-in speed adjustment settings (Mbps).
 * **Built-in Search:** Quickly look up specific games using the integrated search tool.
-* **Live Repack Details & Features Window:** Click the **📋 Features & Details** button on any game card to open a dedicated pop-up window displaying live scraped official game descriptions, repack features, and screenshots.
+* * **Live Repack Details & Features Window:** Click the **📋 Features & Details** button on any game card to open a dedicated pop-up window displaying live scraped official game descriptions, repack features, and screenshots. Note: Certain newer releases with unique structural formats may display a notice stating that detailed text descriptions are unavailable due to how they are set up, directing you to check the website directly.
 * **Dynamic Theme Customization:** Switch up your app's look on the fly using the built-in theme selector in the sidebar, supporting vibrant accents including **Blue, Dark-Blue, Green, Purple, Orange, Red, and Teal**.
 
 ---
