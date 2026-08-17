@@ -79,18 +79,17 @@ Because this tool generates local configuration and tracking files at runtime, p
 **Active Downloads & Speed Limiter**
 ![Downloads Manager](<Active Downloads & Speed Limiter.png>)
 
-**Clean & Portable Local File Structure**
-![Local Files](<Files created after starting exe.png>)
-
-**Real-Debrid Dashboard Integration**
-![Real-Debrid Torrents Page](<Real-Debrid Tracking .png>)
-
 **Live Repack Features & File Selection**
 ![Repack Details](<Details.png>)
 
 **Live Repack Features & File Selection**
 ![Repack Details](<Details 2.png>)
 
+**Real-Debrid Dashboard Integration**
+![Real-Debrid Torrents Page](<Real-Debrid Tracking .png>)
+
+**Clean & Portable Local File Structure**
+![Local Files](<Files created after starting exe.png>)
 ---
 
 ## 💖 Support the Original Creator
