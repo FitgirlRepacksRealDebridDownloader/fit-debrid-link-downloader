@@ -59,7 +59,8 @@ def search_fitgirl_api(query):
                 results.append({
                     "title": title,
                     "magnet": magnet_link,
-                    "image": img_url
+                    "image": img_url,
+                    "url": post.get('link')
                 })
                 
         return results
@@ -230,7 +231,8 @@ def _fetch_and_cache_popular():
                             return {
                                 "title": item["title"],
                                 "magnet": link['href'],
-                                "image": item["image"]
+                                "image": item["image"],
+                                "url": item["url"]
                             }
             except Exception:
                 pass

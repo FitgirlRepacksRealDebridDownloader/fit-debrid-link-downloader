@@ -437,13 +437,14 @@ class MainWindow(ctk.CTk):
         if game.get('image'):
             threading.Thread(target=self._load_card_image, args=(game['image'], img_lbl), daemon=True).start()
 
-        game_url = game.get('link', game.get('url', ''))
+        game_url = game.get('link') or game.get('url') or ''
+        game_title = game.get('title', '')
         
         # Download button styled with active theme accent color
         btn = ctk.CTkButton(card, text="Download", fg_color=self.current_accent, command=lambda m=game['magnet']: self.start_download(m))
         btn.pack(pady=(10, 2), padx=10)
 
-        details_btn = ctk.CTkButton(card, text="📋 Features & Details", fg_color="gray30", hover_color="gray40", command=lambda u=game_url, t=game['title']: self.open_details_dialog(u, t))
+        details_btn = ctk.CTkButton(card, text="📋 Features & Details", fg_color="gray30", hover_color="gray40", command=lambda u=game_url, t=game_title: self.open_details_dialog(u, t))
         details_btn.pack(pady=(2, 10), padx=10)
 
     def _load_card_image(self, img_url, img_lbl):
@@ -753,14 +754,23 @@ class MainWindow(ctk.CTk):
         )
         loading_label.pack(pady=20)
 
-        if game_url:
-            threading.Thread(target=self._fetch_live_details_thread, args=(game_url, details_scroll, loading_label), daemon=True).start()
-        else:
-            loading_label.configure(text="No direct webpage URL available to scrape details for this item.")
+        threading.Thread(target=self._fetch_live_details_thread, args=(game_url, game_title, details_scroll, loading_label), daemon=True).start()
 
-    def _fetch_live_details_thread(self, game_url, scroll_frame, loading_label):
+    def _fetch_live_details_thread(self, game_url, game_title, scroll_frame, loading_label):
         try:
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            
+            if not game_url and game_title:
+                api_results = search_fitgirl_api(game_title)
+                for res in api_results:
+                    if res.get('url') or res.get('link'):
+                        game_url = res.get('url') or res.get('link')
+                        break
+
+            if not game_url:
+                self.after(0, lambda: loading_label.configure(text="No direct webpage URL available to scrape details for this item."))
+                return
+
             response = requests.get(game_url, headers=headers, timeout=10)
             
             parsed_items = []
@@ -769,32 +779,87 @@ class MainWindow(ctk.CTk):
                 content_div = soup.find('div', class_='entry-content')
                 
                 if content_div:
-                    skip_next_ul = False
-                    
-                    for child in content_div.children:
-                        if child.name is None:
-                            continue
-                            
-                        text = child.get_text().strip()
-                        
-                        if child.name in ['h3', 'h4', 'p', 'strong'] and 'Download Mirrors' in text:
-                            skip_next_ul = True
-                            continue 
-                            
-                        if skip_next_ul and child.name == 'ul':
-                            skip_next_ul = False
-                            continue
-                            
-                        for img in child.find_all('img'):
-                            img_url = img.get('src')
+                    for tag in content_div.find_all(['style', 'script']):
+                        tag.decompose()
+
+                    # 1. Extract Header title and metadata from the first paragraph
+                    first_p = content_div.find('p')
+                    if first_p:
+                        img = first_p.find('img')
+                        if img:
+                            img_url = img.get('src') or img.get('data-src')
                             if img_url:
                                 parsed_items.append({'type': 'image', 'url': img_url})
-                                
-                        if text:
-                            parsed_items.append({'type': 'text', 'content': text})
-                            
-                    if not parsed_items:
-                        parsed_items.append({'type': 'text', 'content': "No detailed repack features found on the page."})
+                        
+                        for img_tag in first_p.find_all('img'):
+                            img_tag.decompose()
+                        meta_text = first_p.get_text().strip()
+                        if meta_text:
+                            parsed_items.append({'type': 'text', 'content': meta_text})
+
+                    # 2. Extract Screenshots Section
+                    screenshots_header = None
+                    for h3 in content_div.find_all('h3'):
+                        if 'screenshots' in h3.get_text().lower():
+                            screenshots_header = h3
+                            break
+                    
+                    if screenshots_header:
+                        parsed_items.append({'type': 'text', 'content': "Screenshots:"})
+                        curr = screenshots_header.find_next_sibling()
+                        while curr and curr.name != 'h3':
+                            if curr.name in ['p', 'div']:
+                                for img in curr.find_all('img'):
+                                    img_url = img.get('src') or img.get('data-src') or img.get('data-lazy-src')
+                                    if img_url and not any(bad in img_url.lower() for bad in ['support2', 'cropped-icon', 'paw.png']):
+                                        parsed_items.append({'type': 'image', 'url': img_url})
+                            curr = curr.find_next_sibling()
+
+                    # 3. Extract Repack Features Section
+                    features_header = None
+                    for h3 in content_div.find_all('h3'):
+                        if 'repack features' in h3.get_text().lower():
+                            features_header = h3
+                            break
+                    
+                    if features_header:
+                        parsed_items.append({'type': 'text', 'content': "Repack Features:"})
+                        ul_elem = features_header.find_next_sibling('ul')
+                        if ul_elem:
+                            seen_items = set()
+                            for li in ul_elem.find_all('li', recursive=False):
+                                li_text = li.get_text().strip()
+                                if li_text and li_text not in seen_items:
+                                    seen_items.add(li_text)
+                                    parsed_items.append({'type': 'text', 'content': f"• {li_text}"})
+
+                    # 4. Extract Game Description
+                    spoiler_content = None
+                    for spoiler in content_div.find_all('div', class_='su-spoiler'):
+                        title_div = spoiler.find('div', class_='su-spoiler-title')
+                        if title_div and 'game description' in title_div.get_text().lower():
+                            spoiler_content = spoiler.find('div', class_='su-spoiler-content')
+                            break
+
+                    if spoiler_content:
+                        parsed_items.append({'type': 'text', 'content': "Game Description:"})
+                        clean_desc = spoiler_content.get_text(separator=" ", strip=True)
+                        if clean_desc:
+                            parsed_items.append({'type': 'text', 'content': clean_desc})
+
+                    # IF IT'S A NEW RELEASE FORMAT WHERE FEATURES FAILED TO PARSE, SHOW PROFESSIONAL NOTICE INSTEAD OF FALLING BACK TO RAW MIRRORS
+                    if len(parsed_items) <= 1 or not features_header:
+                        parsed_items = [
+                            parsed_items[0] if parsed_items else {'type': 'text', 'content': game_title},
+                            {
+                                'type': 'text', 
+                                'content': (
+                                    "Detailed text description unavailable for this release format due to how it is set up. "
+                                    "You can find it on the website. Apologies.\n\n"
+                                    "Use the download button below to grab the torrent directly via Real-Debrid."
+                                )
+                            }
+                        ]
                 else:
                     parsed_items.append({'type': 'text', 'content': "Could not locate main entry-content block on the page."})
             else:
@@ -819,8 +884,12 @@ class MainWindow(ctk.CTk):
                 if not scroll_frame.winfo_exists():
                     break
                 if item['type'] == 'text':
-                    lbl = ctk.CTkLabel(scroll_frame, text=item['content'], justify="left", wraplength=600, font=("Arial", 12))
-                    lbl.pack(anchor="nw", padx=10, pady=(0, 15))
+                    is_header = item['content'] in ["Screenshots:", "Repack Features:", "Game Description:"]
+                    font_cfg = ("Arial", 13, "bold") if is_header else ("Arial", 12)
+                    text_color = ("#93c5fd", "white") if is_header else ("gray10", "white")
+                    
+                    lbl = ctk.CTkLabel(scroll_frame, text=item['content'], justify="left", wraplength=600, font=font_cfg, text_color=text_color)
+                    lbl.pack(anchor="nw", padx=10, pady=(5 if is_header else 0, 15))
                 elif item['type'] == 'image':
                     img_lbl = ctk.CTkLabel(scroll_frame, text="Loading image...")
                     img_lbl.pack(anchor="nw", padx=10, pady=(0, 15))
@@ -829,7 +898,7 @@ class MainWindow(ctk.CTk):
                 pass
 
     def _load_detail_image(self, img_url, img_lbl):
-        """Asynchronously loads, scales, and renders detailed game view images safely."""
+        """Asynchronously downloads, scales, and renders detailed game view images safely."""
         try:
             try:
                 if not img_lbl.winfo_exists():
