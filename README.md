@@ -81,7 +81,7 @@ Because this tool generates local configuration and tracking files at runtime, p
 ![Downloads Manager](<Active Downloads & Speed Limiter.png>)
 
 ** Downloads & File Extraction**
-![Downloads Manager](<Downloads Extracted.png>)
+![Downloads Manager](<Downloads Extracted .png>)
 
 **Live Repack Features & File Selection**
 ![Repack Details](<Details.png>)
