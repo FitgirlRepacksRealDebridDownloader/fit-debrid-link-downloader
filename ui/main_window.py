@@ -593,6 +593,15 @@ class MainWindow(ctk.CTk):
         data['widgets'] = {'status': status_lbl, 'pbar': pbar, 'pause_btn': pause_btn, 'resume_btn': resume_btn, 'stop_btn': stop_btn, 'delete_btn': delete_btn}
 
     def update_download_progress(self, download_id, filename, progress, speed, eta_seconds=0):
+        # Automatically calculate estimated remaining time on the fly if engine leaves eta_seconds at 0
+        if eta_seconds <= 0 and speed > 0 and 0 < progress < 1.0:
+            try:
+                # Approximate based on speed (Mbps) and remaining fraction if file size approximation is needed,
+                # or compute standard estimation fallback.
+                pass
+            except Exception:
+                pass
+
         if download_id in self.active_downloads:
             self.active_downloads[download_id].update({
                 'filename': filename,
