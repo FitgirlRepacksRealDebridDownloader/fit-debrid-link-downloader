@@ -19,6 +19,7 @@ _HEADERS = {
 }
 _CACHE_FILE = "repacks_cache.json"
 _POPULAR_CACHE_FILE = "popular_cache.json"
+_UPCOMING_CACHE_FILE = "upcoming_cache.json"
 
 
 # =====================================================================
@@ -267,30 +268,59 @@ def _fetch_and_cache_popular():
 # =====================================================================
 # --- UPCOMING REPACKS & SCHEDULE SCRAPER ---
 # =====================================================================
-def get_upcoming_repacks():
-    """Scrapes FitGirl's upcoming repacks from the colored span layout[cite: 5]."""
+def get_upcoming_repacks(force_refresh=False):
+    """Loads upcoming repacks from cache instantly, or scrapes live if forced[cite: 5]."""
+    if not force_refresh and os.path.exists(_UPCOMING_CACHE_FILE):
+        try:
+            with open(_UPCOMING_CACHE_FILE, "r", encoding="utf-8") as f:
+                cached_upcoming = json.load(f)
+                if cached_upcoming:
+                    import threading
+                    threading.Thread(target=_fetch_and_cache_upcoming, daemon=True).start()
+                    return cached_upcoming
+        except Exception:
+            pass
+
+    return _fetch_and_cache_upcoming()
+
+def _fetch_and_cache_upcoming():
+    """Scrapes FitGirl's upcoming repacks and saves them to local cache[cite: 5]."""
     upcoming_url = "https://fitgirl-repacks.site/upcoming-repacks/"
     try:
         response = requests.get(upcoming_url, headers=_HEADERS, timeout=10)
         if response.status_code != 200:
-            return []
+            results = search_upcoming_fallback()
+        else:
+            soup = BeautifulSoup(response.text, 'html.parser')
             
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        upcoming_items = []
-        for span in soup.find_all('span', style=lambda value: value and '#339966' in value.lower()):
-            text = span.get_text().strip()
-            if text and len(text) > 2:
-                if {"title": text, "magnet": None, "image": None} not in upcoming_items:
-                    upcoming_items.append({
-                        "title": text,
-                        "magnet": None,
-                        "image": None
-                    })
-                    
-        return upcoming_items[:50]
+            upcoming_items = []
+            for span in soup.find_all('span', style=lambda value: value and '#339966' in value.lower()):
+                text = span.get_text().strip()
+                if text and len(text) > 2:
+                    item_obj = {"title": text, "magnet": None, "image": None}
+                    if item_obj not in upcoming_items:
+                        upcoming_items.append(item_obj)
+                        
+            results = upcoming_items[:50]
+            if not results:
+                results = search_upcoming_fallback()
+
+        if results:
+            try:
+                with open(_UPCOMING_CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump(results, f, ensure_ascii=False, indent=4)
+            except Exception:
+                pass
+                
+        return results
     except Exception as e:
         print(f"Error fetching upcoming repacks: {e}")
+        if os.path.exists(_UPCOMING_CACHE_FILE):
+            try:
+                with open(_UPCOMING_CACHE_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
         return []
 
 def search_upcoming_fallback():
