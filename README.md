@@ -45,6 +45,7 @@ Because this tool generates local configuration and tracking files at runtime, p
   * **Granular Control Panel:** Full management controls for active tasks with dedicated **Pause**, **Resume**, **Stop**, and **🗑 Delete** buttons.
   * **Auto-Extraction:** Automatically unzips and extracts downloaded archive contents directly into their own dedicated folder inside your downloads directory upon completion.
   * **Library & History Tracker:** View a comprehensive log of all completed downloads with quick-access **📁 Open Folder** buttons.
+  * ⚠️ Note on the Downloads / Queue Page: When you start a download, it takes a few moments to communicate with Real-Debrid and resolve the links. If you navigate to the Downloads tab immediately, the list may appear blank for a few seconds. If it doesn't populate right away, simply click the Refresh button or toggle to another tab and back, and your active download queue will instantly render.
 * **Speed Limiter:** Fine-tune your bandwidth using the built-in speed adjustment settings (Mbps).
 * **Built-in Search:** Quickly look up specific games using the integrated search tool.
 * * **Live Repack Details & Features Window:** Click the **📋 Features & Details** button on any game card to open a dedicated pop-up window displaying live scraped official game descriptions, repack features, and screenshots. Note: Certain newer releases with unique structural formats may display a notice stating that detailed text descriptions are unavailable due to how they are set up, directing you to check the website directly.
