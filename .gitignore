@@ -1,5 +1,7 @@
+node_modules/
 build/
 dist/
+target/
 *.spec
 config.json
 download_history.json

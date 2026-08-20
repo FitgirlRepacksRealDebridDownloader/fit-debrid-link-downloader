@@ -1,6 +1,3 @@
-# =====================================================================
-# --- IMPORTS & DEPENDENCIES ---
-# =====================================================================
 import os
 import html
 import json
@@ -8,41 +5,41 @@ import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-
-# =====================================================================
-# --- CONFIGURATION & ENDPOINTS ---
-# =====================================================================
-_BASE_URL = "https://fitgirl-repacks.site"
-_API_URL = f"{_BASE_URL}/wp-json/wp/v2/posts"
-_HEADERS = {
+# Configuration & Constants
+BASE_URL = "https://fitgirl-repacks.site"
+API_URL = f"{BASE_URL}/wp-json/wp/v2/posts"
+HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 }
-_CACHE_FILE = "repacks_cache.json"
-_POPULAR_CACHE_FILE = "popular_cache.json"
-_UPCOMING_CACHE_FILE = "upcoming_cache.json"
+CACHE_FILE = "repacks_cache.json"
+MASTER_CACHE_FILE = "pages_cache.json"
+POPULAR_CACHE_FILE = "popular_cache.json"
+UPCOMING_CACHE_FILE = "upcoming_cache.json"
 
 
-# =====================================================================
-# --- SEARCH API SCRAPER ---
-# =====================================================================
-def search_fitgirl_api(query):
-    """Searches FitGirl via WordPress REST API and extracts magnet links directly[cite: 5]."""
-    params = {
-        "search": query,
-        "per_page": 5
-    }
+def search_fitgirl_api(query: str):
+    """Search FitGirl via WordPress REST API and enforce strict title-only word matching."""
+    params = {"search": query, "per_page": 100}
     
     try:
-        response = requests.get(_API_URL, params=params, headers=_HEADERS, timeout=15)
+        response = requests.get(API_URL, params=params, headers=HEADERS, timeout=15)
         response.raise_for_status()
         posts = response.json()
+        
+        query_clean = query.lower().strip()
+        query_words = query_clean.split()
         
         results = []
         for post in posts:
             raw_title = post.get('title', {}).get('rendered', '').strip()
             title = html.unescape(raw_title)
-            content_html = post.get('content', {}).get('rendered', '')
+            lower_title = title.lower()
             
+            # EXCLUSIVE TITLE FILTER: Every word typed in search MUST be in the game title
+            if query_words and not all(word in lower_title for word in query_words):
+                continue
+                
+            content_html = post.get('content', {}).get('rendered', '')
             soup = BeautifulSoup(content_html, 'html.parser')
             
             magnet_link = None
@@ -70,26 +67,30 @@ def search_fitgirl_api(query):
         return []
 
 
-# =====================================================================
-# --- CACHE MANAGEMENT & RECENT POSTS ---
-# =====================================================================
-def get_cached_posts_only():
-    """Instantly returns local cache without touching the network[cite: 5]."""
-    if os.path.exists(_CACHE_FILE):
+def get_cached_posts_only(page: int = 1):
+    """Retrieve local cache for a specific page instantly without network requests[cite: 2]."""
+    if page == 1 and os.path.exists(CACHE_FILE):
         try:
-            with open(_CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
+        except Exception:
+            pass
+
+    if os.path.exists(MASTER_CACHE_FILE):
+        try:
+            with open(MASTER_CACHE_FILE, "r", encoding="utf-8") as f:
+                cache_data = json.load(f)
+                return cache_data.get(str(page), [])
         except Exception:
             pass
     return []
 
-def fetch_and_update_cache():
-    """Fetches fresh posts from the API in the background and updates the local cache[cite: 5]."""
-    params = {
-        "per_page": 30
-    }
+
+def fetch_and_update_cache(page: int = 1):
+    """Fetch fresh posts from the API and update local cache entries[cite: 2]."""
+    params = {"per_page": 24, "page": page}
     try:
-        response = requests.get(_API_URL, params=params, headers=_HEADERS, timeout=15)
+        response = requests.get(API_URL, params=params, headers=HEADERS, timeout=15)
         response.raise_for_status()
         posts = response.json()
         
@@ -99,7 +100,7 @@ def fetch_and_update_cache():
             title = html.unescape(raw_title)
             
             lower_title = title.lower()
-            if "updates digest" in lower_title or "repack roundup" in lower_title or "site update" in lower_title:
+            if any(term in lower_title for term in ["updates digest", "repack roundup", "site update"]):
                 continue
                 
             content_html = post.get('content', {}).get('rendered', '')
@@ -128,36 +129,54 @@ def fetch_and_update_cache():
                 break
                 
         if results:
-            with open(_CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(results, f, ensure_ascii=False, indent=4)
+            if page == 1:
+                try:
+                    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                        json.dump(results, f, ensure_ascii=False, indent=4)
+                except Exception:
+                    pass
+
+            cache_data = {}
+            if os.path.exists(MASTER_CACHE_FILE):
+                try:
+                    with open(MASTER_CACHE_FILE, "r", encoding="utf-8") as f:
+                        cache_data = json.load(f)
+                except Exception:
+                    cache_data = {}
+            
+            cache_data[str(page)] = results
+            
+            try:
+                with open(MASTER_CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump(cache_data, f, ensure_ascii=False, indent=4)
+            except Exception:
+                pass
         return results
     except Exception:
         return []
 
-def get_recent_fitgirl_posts(force_refresh=False):
-    """Loads cache instantly, or fetches live if force_refresh is True[cite: 5]."""
+
+def get_recent_fitgirl_posts(page: int = 1, force_refresh: bool = False):
+    """Load cached posts instantly or query live if force refresh is requested[cite: 2]."""
     if force_refresh:
-        fresh = fetch_and_update_cache()
+        fresh = fetch_and_update_cache(page)
         if fresh:
             return fresh
 
-    cached = get_cached_posts_only()
+    cached = get_cached_posts_only(page)
     if not cached:
-        return fetch_and_update_cache()
+        return fetch_and_update_cache(page)
     else:
         import threading
-        threading.Thread(target=fetch_and_update_cache, daemon=True).start()
+        threading.Thread(target=fetch_and_update_cache, args=(page,), daemon=True).start()
     return cached
 
 
-# =====================================================================
-# --- POPULAR REPACKS SCRAPER ---
-# =====================================================================
-def get_popular_repacks(force_refresh=False):
-    """Loads popular repacks from cache instantly, or scrapes live if force_refresh is True[cite: 5]."""
-    if not force_refresh and os.path.exists(_POPULAR_CACHE_FILE):
+def get_popular_repacks(force_refresh: bool = False):
+    """Load weekly popular repacks from cache or scrape live[cite: 2]."""
+    if not force_refresh and os.path.exists(POPULAR_CACHE_FILE):
         try:
-            with open(_POPULAR_CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(POPULAR_CACHE_FILE, "r", encoding="utf-8") as f:
                 cached_popular = json.load(f)
                 if cached_popular:
                     import threading
@@ -168,15 +187,15 @@ def get_popular_repacks(force_refresh=False):
 
     return _fetch_and_cache_popular()
 
+
 def _fetch_and_cache_popular():
-    """Scrapes the popular widget and saves it to local cache[cite: 5]."""
+    """Scrape the popular widget container and cache results[cite: 2]."""
     try:
-        response = requests.get(_BASE_URL, headers=_HEADERS, timeout=15)
+        response = requests.get(BASE_URL, headers=HEADERS, timeout=15)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         
         target_items = []
-        
         for widget in soup.select('.jetpack_top_posts_widget'):
             widget_title = widget.find(['h2', 'h3', 'h4'])
             if widget_title and "Most Popular Repacks of the Week" in widget_title.get_text():
@@ -187,11 +206,8 @@ def _fetch_and_cache_popular():
                         
                     game_url = a_tag.get('href')
                     raw_title = a_tag.get('title') or ""
-                    
                     img_tag = a_tag.find('img')
-                    img_url = None
-                    if img_tag:
-                        img_url = img_tag.get('src') or img_tag.get('data-src')
+                    img_url = (img_tag.get('src') or img_tag.get('data-src')) if img_tag else None
                         
                     if game_url and raw_title:
                         target_items.append({
@@ -201,30 +217,10 @@ def _fetch_and_cache_popular():
                         })
                 break
 
-        if not target_items:
-            widget = soup.select_one('.jetpack_top_posts_widget')
-            if widget:
-                for item_div in widget.select('.widget-grid-view-image'):
-                    a_tag = item_div.find('a', href=True)
-                    if not a_tag:
-                        continue
-                    game_url = a_tag.get('href')
-                    raw_title = a_tag.get('title') or ""
-                    img_tag = a_tag.find('img')
-                    img_url = img_tag.get('src') if img_tag else None
-                    
-                    if game_url and raw_title:
-                        target_items.append({
-                            "url": game_url,
-                            "title": html.unescape(raw_title),
-                            "image": img_url
-                        })
-
         results = []
-
         def fetch_popular_magnet(item):
             try:
-                game_resp = requests.get(item["url"], headers=_HEADERS, timeout=8)
+                game_resp = requests.get(item["url"], headers=HEADERS, timeout=8)
                 if game_resp.status_code == 200:
                     game_soup = BeautifulSoup(game_resp.text, 'html.parser')
                     for link in game_soup.find_all('a', href=True):
@@ -248,7 +244,7 @@ def _fetch_and_cache_popular():
 
         if results:
             try:
-                with open(_POPULAR_CACHE_FILE, "w", encoding="utf-8") as f:
+                with open(POPULAR_CACHE_FILE, "w", encoding="utf-8") as f:
                     json.dump(results, f, ensure_ascii=False, indent=4)
             except Exception:
                 pass
@@ -256,23 +252,20 @@ def _fetch_and_cache_popular():
         return results
     except Exception as e:
         print(f"Error scraping popular repacks: {e}")
-        if os.path.exists(_POPULAR_CACHE_FILE):
+        if os.path.exists(POPULAR_CACHE_FILE):
             try:
-                with open(_POPULAR_CACHE_FILE, "r", encoding="utf-8") as f:
+                with open(POPULAR_CACHE_FILE, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception:
                 pass
         return []
 
 
-# =====================================================================
-# --- UPCOMING REPACKS & SCHEDULE SCRAPER ---
-# =====================================================================
-def get_upcoming_repacks(force_refresh=False):
-    """Loads upcoming repacks from cache instantly, or scrapes live if forced[cite: 5]."""
-    if not force_refresh and os.path.exists(_UPCOMING_CACHE_FILE):
+def get_upcoming_repacks(force_refresh: bool = False):
+    """Load upcoming release schedules from cache or scrape live[cite: 2]."""
+    if not force_refresh and os.path.exists(UPCOMING_CACHE_FILE):
         try:
-            with open(_UPCOMING_CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(UPCOMING_CACHE_FILE, "r", encoding="utf-8") as f:
                 cached_upcoming = json.load(f)
                 if cached_upcoming:
                     import threading
@@ -283,16 +276,16 @@ def get_upcoming_repacks(force_refresh=False):
 
     return _fetch_and_cache_upcoming()
 
+
 def _fetch_and_cache_upcoming():
-    """Scrapes FitGirl's upcoming repacks and saves them to local cache[cite: 5]."""
+    """Scrape upcoming repacks page and update local cache[cite: 2]."""
     upcoming_url = "https://fitgirl-repacks.site/upcoming-repacks/"
     try:
-        response = requests.get(upcoming_url, headers=_HEADERS, timeout=10)
+        response = requests.get(upcoming_url, headers=HEADERS, timeout=10)
         if response.status_code != 200:
             results = search_upcoming_fallback()
         else:
             soup = BeautifulSoup(response.text, 'html.parser')
-            
             upcoming_items = []
             for span in soup.find_all('span', style=lambda value: value and '#339966' in value.lower()):
                 text = span.get_text().strip()
@@ -307,7 +300,7 @@ def _fetch_and_cache_upcoming():
 
         if results:
             try:
-                with open(_UPCOMING_CACHE_FILE, "w", encoding="utf-8") as f:
+                with open(UPCOMING_CACHE_FILE, "w", encoding="utf-8") as f:
                     json.dump(results, f, ensure_ascii=False, indent=4)
             except Exception:
                 pass
@@ -315,18 +308,19 @@ def _fetch_and_cache_upcoming():
         return results
     except Exception as e:
         print(f"Error fetching upcoming repacks: {e}")
-        if os.path.exists(_UPCOMING_CACHE_FILE):
+        if os.path.exists(UPCOMING_CACHE_FILE):
             try:
-                with open(_UPCOMING_CACHE_FILE, "r", encoding="utf-8") as f:
+                with open(UPCOMING_CACHE_FILE, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception:
                 pass
         return []
 
+
 def search_upcoming_fallback():
-    """Fallback to searching posts if the exact slug endpoint varies[cite: 5]."""
+    """Fallback parser for upcoming schedule page elements[cite: 2]."""
     try:
-        response = requests.get(f"{_BASE_URL}/upcoming-repacks/", headers=_HEADERS, timeout=10)
+        response = requests.get(f"{BASE_URL}/upcoming-repacks/", headers=HEADERS, timeout=10)
         if response.status_code != 200:
             return [{"title": "Could not connect to upcoming schedule page.", "magnet": None, "image": None}]
             
@@ -340,23 +334,16 @@ def search_upcoming_fallback():
                 lower_text = text.lower()
                 if not text or len(text) < 4 or "do not ask" in lower_text or "p.s." in lower_text:
                     continue
-                items.append({
-                    "title": text,
-                    "magnet": None,
-                    "image": None
-                })
+                items.append({"title": text, "magnet": None, "image": None})
         return items[:40]
     except Exception:
         return []
 
 
-# =====================================================================
-# --- SITE STATUS CHECKER ---
-# =====================================================================
-def check_site_status():
-    """Checks if FitGirl Repacks site is up and reachable[cite: 5]."""
+def check_site_status() -> bool:
+    """Verify if the primary domain is up and responding[cite: 2]."""
     try:
-        response = requests.get(_BASE_URL, headers=_HEADERS, timeout=5)
+        response = requests.get(BASE_URL, headers=HEADERS, timeout=5)
         return response.status_code == 200
     except Exception:
         return False
