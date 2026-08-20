@@ -111,16 +111,44 @@ This application is built on a modern high-performance hybrid architecture:
 
 ## 📸 App Previews
 
-* **Main Interface & Recent Releases** (`Main Interface & Recent Releases.png`)
-* **Most Popular Repacks of the Week** (`Most Popular Repacks of the Week.png`)
-* **Upcoming Repacks Schedule** (`Upcoming Repacks Schedule.png`)
-* **Integrated Search Functionality** (`Integrated Search Functionality.png`)
-* **Selective Downloading & File Management** (`Selective Downloading & File Management.png`)
-* **Active Downloads & Speed Limiter** (`Active Downloads & Speed Limiter.png`)
-* **Downloads & File Extraction** (`Downloads Extracted .png`)
-* **Live Repack Features & File Selection** (`Details.png` & `Details 2.png`)
-* **Real-Debrid Dashboard Integration** (`Real-Debrid Tracking .png`)
-* **Clean & Portable Local File Structure** (`Files created after starting exe.png`)
+### Main Interface & Recent Releases
+![Main Interface & Recent Releases](Assets/Main%20Interface%20&%20Recent%20Releases.png)
+
+### Main Interface & Recent Releases Page 2
+![Main Interface & Recent Releases Page 2](Assets/Main%20Interface%20&%20Recent%20Releases%20page%202.png)
+
+### Most Popular Repacks of the Week
+![Most Popular Repacks of the Week](Assets/Most%20Popular%20Repacks%20of%20the%20Week.png)
+
+### Upcoming Repacks Schedule
+![Upcoming Repacks Schedule](Assets/Upcoming%20Repacks%20Schedule.png)
+
+### Integrated Search Functionality
+![Integrated Search Functionality](Assets/Integrated%20Search%20Functionality.png)
+
+### Selective Downloading & File Management
+![Selective Downloading & File Management](Assets/Selective%20Downloading%20&%20File%20Management.png)
+
+### Active Downloads & Speed Limiter
+![Active Downloads & Speed Limiter](Assets/Active%20Downloads%20&%20Speed%20Limiter.png)
+
+### Active Downloads & Speed Limiter 2
+![Active Downloads & Speed Limiter 2](Assets/Active%20Downloads%20&%20Speed%20Limiter%202.png)
+
+### Downloads Extracted
+![Downloads Extracted](Assets/Downloads%20Extracted.png)
+
+### Live Repack Features & File Selection
+![Live Repack Features & File Selection](Assets/Live%20Repack%20Features%20&%20File%20Selection%20.png)
+
+### Live Repack Features & File Selection 2
+![Live Repack Features & File Selection 2](Assets/Live%20Repack%20Features%20&%20File%20Selection%202.png)
+
+### Real-Debrid Tracking
+![Real-Debrid Tracking](Assets/Real-Debrid%20Tracking.png)
+
+### Clean & Portable Local File Structure
+![Clean & Portable Local File Structure](Assets/Clean%20&%20Portable%20Local%20File%20Structure%20.png)
 
 ---
 
